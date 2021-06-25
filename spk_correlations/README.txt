@@ -27,3 +27,10 @@ Configuration file contents:
                           Each key of the dict labels a neuron class. The values is another dict, where each key/value pair defines a neuron property and a list of valid values.
                           Example: {"L2_EXC": {"layer": [2], "synapse_class": ["EXC"]}}
  - condition_filter (dict, Optional): Only analyzes simulations with the specified simulation conditions.
+
+
+
+----
+
+spk-correlation-workflow.py is a functionally identical version that takes inputs as specified in https://bbpgitlab.epfl.ch/conn/simulation/sscx-analysis/-/issues/3
+

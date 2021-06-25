@@ -1,3 +1,5 @@
+import os
+
 import bluepy
 import simProjectAnalysis as spa
 import pandas
@@ -9,67 +11,45 @@ def parse_arguments():
     import sys
     import json
     args = sys.argv[1:]
-    if len(args) < 3:
+    if len(args) < 2:
         print("""Usage:
-        {0} config_file.json project_simulations.txt output_fn.pkl
+        {0} simulations.pkl config_file.json
         For details, see included README.txt
         """.format(__file__))
         sys.exit(2)
-    with open(args[0], "r") as fid:
+    with open(args[1], "r") as fid:
         cfg = json.load(fid)
-    data = args[1]
-    out_fn = args[2]
-    return cfg, data, out_fn
+    sims = pandas.read_pickle(args[0])
+    return sims, cfg
 
 
-def json_reader(fn):
-    import json
-    with open(fn, "r") as fid:
-        out = json.load(fid)
-    if isinstance(out, list):
-        out = out[0]
-    for k, v in list(out.items()):
-        if not (isinstance(v, int) or isinstance(v, float) or isinstance(v, str)):
-            out.pop(k)
-    if "circuit_config" not in out:
-        out["circuit_config"] = out["circuit_path"] + "/CircuitConfig"
-    return out
-
-
-def initial_setup(fn_sims):
-    import os
-    with open(fn_sims, "r") as fid:
-        sims = [_x.strip() for _x in fid.readlines()]
-
+def initial_setup(sims):
+    import hashlib
+    conditions = sims.index.names
     out = []
-    for sim_path in sims:
-        fn_sim = os.path.join(sim_path, "BlueConfig")
-        conds = json_reader(os.path.join(sim_path, "BlueConfig.json"))
-        out.append(spa.ResultsWithConditions(fn_sim, **conds))
-    out = spa.ConditionCollection(out)
-
-    redundant = [cond for cond in out.conditions() if len(out.labels_of(cond)) < 2]
-    for cond in redundant:
-        if cond != "circuit_config":
-            out.remove_label(cond)
-    if "path" in out.conditions():
-        out.remove_label("path")
-    return out
+    circuit_dict = {}
+    for cond, path in sims.iteritems():
+        cond_dict = dict(zip(conditions, cond))
+        value = bluepy.Simulation(path)
+        circ_hash = hashlib.md5(str(sim.circuit.config).encode("UTF-8")).hexdigest()
+        if circ_hash not in circuit_dict:
+            circuit_dict[circ_hash] = sim.circuit
+        out.append(spa.ResultsWithConditions(value, circuit_hash=circ_hash,
+                                             **cond_dict))
+    return spa.ConditionCollection(out), circuit_dict
 
 
-def read_spikes(sim_fn):
-    sim = bluepy.Simulation(sim_fn)
+def read_spikes(sim):
     raw_spikes = sim.spikes.get()
     return numpy.vstack([raw_spikes.index.values, raw_spikes.values]).transpose()
 
 
-def create_gid_dict(spikes, type_definitions, base_target):
+def create_gid_dict(circ_dict, type_definitions, base_target):
     out = {}
     properties = numpy.unique(numpy.hstack([list(x.keys()) for x in
                                             type_definitions.values()]))
-    circuits = spikes.labels_of("circuit_config")
-    for circ_fn in circuits:
-        circ = bluepy.Circuit(circ_fn)
+
+    for circ_hash, circ in circ_dict.items():
         cells = circ.cells.get(group=base_target, properties=properties)
 
         def evaluate_a_property(prop_name, valid_vals):
@@ -84,17 +64,17 @@ def create_gid_dict(spikes, type_definitions, base_target):
             for prop, valid_vals in type_fltrs.items():
                 valid = valid & evaluate_a_property(prop, valid_vals)
             type_gids[type_lbl] = cells.index[valid].values
-        out[circ_fn] = type_gids
+        out[circ_hash] = type_gids
     return out
 
 
 def split_spikes_factory(target_gid_dicts):
-    def split_spikes(circ_fns, spks_in):
-        for circ, spks in zip(circ_fns, spks_in):
+    def split_spikes(circ_hashes, spks_in):
+        for circ, spks in zip(circ_hashes, spks_in):
             gid_dict = target_gid_dicts[circ]
             for label, gids in tqdm.tqdm(gid_dict.items()):
                 valid = numpy.in1d(spks[:, 1], gids)
-                yield spks[valid], {"circuit_config": circ, "neuron_type": label}
+                yield spks[valid], {"circuit_hash": circ, "neuron_type": label}
     return split_spikes
 
 
@@ -184,8 +164,9 @@ def sta_factory(t_win, binsize, return_type):
 
 
 def main():
-    cfg, data, out_fn = parse_arguments()
-    data = initial_setup(data)
+    sims, cfg = parse_arguments()
+    out_fn = cfg.pop("output_root")
+    data, circ_dict = initial_setup(sims)
 
     # Specify in config to apply the analysis only to a subset of simulation conditions
     for k, v in cfg.get("condition_filter", {}).items():
@@ -199,10 +180,10 @@ def main():
     t_bins = numpy.arange(t_start, t_end + binsize, binsize)
 
     # Get definition of neuron classes from config
-    target_gid_dicts = create_gid_dict(spikes, cfg["neuron_classes"], cfg.get("base_target", "Mosaic"))
+    target_gid_dicts = create_gid_dict(circ_dict, cfg["neuron_classes"], cfg.get("base_target", "Mosaic"))
 
     # Split spike results into individual results for the different classes
-    spikes_per_target = spikes.transform(["circuit_config"], split_spikes_factory(target_gid_dicts), xy=True)
+    spikes_per_target = spikes.transform(["circuit_hash"], split_spikes_factory(target_gid_dicts), xy=True)
 
     # Create normalized histograms
     hists_per_target = spikes_per_target.map(histogram_factory(t_bins))
@@ -229,7 +210,7 @@ def main():
     correlation_res.add_label("t_start", t_start)
     correlation_res.add_label("t_end", t_end)
 
-    correlation_res.to_pandas().agg(lambda x: x).to_pickle(out_fn)
+    correlation_res.to_pandas().agg(lambda x: x).to_pickle(os.path.join(out_fn, "results.pkl"))
 
 
 if __name__ == "__main__":
