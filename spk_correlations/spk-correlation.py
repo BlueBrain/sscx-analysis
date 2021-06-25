@@ -9,6 +9,12 @@ def parse_arguments():
     import sys
     import json
     args = sys.argv[1:]
+    if len(args) < 3:
+        print("""Usage:
+        {0} config_file.json project_simulations.txt output_fn.pkl
+        For details, see included README.txt
+        """.format(__file__))
+        sys.exit(2)
     with open(args[0], "r") as fid:
         cfg = json.load(fid)
     data = args[1]
