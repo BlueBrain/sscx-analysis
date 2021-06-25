@@ -11,6 +11,7 @@ Configuration file contents:
  - t_start (Optional, float): Spiking activity before that point is ignored (Default: 0.0)
  - t_end (Optional, float): Spiking activity after that point is ignored (Default: time of last spike)
  - binsize (float): Spiking activity will be binned in bins of that size (in ms).
+ - n_controls (Optional, int): How many random controls to generate by shuffling spiking times. (Default: 0)
  - correlation (dict): Specifies the type of correlogram:
     - t_win (Optional, list of floats): Correlation is calculated for delta t offsets between those two values (in ms). Default: [-250.0, 250.0]
     - type (str): One of: "sta", "convolution". If "convolution", the correlation is calculated as the convolution of the normalized spiking histograms of the populations

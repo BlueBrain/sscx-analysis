@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+
+
 import os
 
 import bluepy
@@ -66,6 +69,17 @@ def create_gid_dict(circ_dict, type_definitions, base_target):
             type_gids[type_lbl] = cells.index[valid].values
         out[circ_hash] = type_gids
     return out
+
+
+def shuffle_spikes_factory(n_controls):
+    def shuffle_spikes(spikes):
+        if n_controls == 0:
+            return [(spikes.res, {})]
+        yield spikes.res, {"control_type": "data", "control_index": 0}
+        for i in range(n_controls):
+            idxx = numpy.random.permutation(len(spikes.res))
+            yield spikes.res[idxx], {"control_type": "shuffled", "control_index": i}
+    return shuffle_spikes
 
 
 def split_spikes_factory(target_gid_dicts):
@@ -172,6 +186,9 @@ def main():
     for k, v in cfg.get("condition_filter", {}).items():
         data = data.filter(**dict([(k, v)]))
     spikes = data.map(read_spikes)
+
+    # Generate controls
+    spikes.unpool(shuffle_spikes_factory(cfg.get("n_controls", 0)))
 
     # Get parameters for spike binning from config
     binsize = cfg.get("binsize", 2.0)
