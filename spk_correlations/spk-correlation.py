@@ -38,7 +38,7 @@ def json_reader(fn):
     return out
 
 
-def initial_setup(fn_sims):
+def initial_setup(fn_sims, required_conditions=[]):
     import os
     with open(fn_sims, "r") as fid:
         sims = [_x.strip() for _x in fid.readlines()]
@@ -49,8 +49,11 @@ def initial_setup(fn_sims):
         conds = json_reader(os.path.join(sim_path, "BlueConfig.json"))
         out.append(spa.ResultsWithConditions(fn_sim, **conds))
     out = spa.ConditionCollection(out)
+	
+	assert numpy.all([cond in out.conditions() for cond in required_conditions])
 
-    redundant = [cond for cond in out.conditions() if len(out.labels_of(cond)) < 2]
+    redundant = [cond for cond in out.conditions()
+	             if (len(out.labels_of(cond)) < 2) and cond not in required_conditions]
     for cond in redundant:
         if cond != "circuit_config":
             out.remove_label(cond)
