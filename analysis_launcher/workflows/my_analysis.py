@@ -4,19 +4,10 @@
 
 import sys
 import json
+import os
+import pandas as pd
 from bluepy import Simulation
 import matplotlib.pyplot as plt
-
-def dummy_analysis():
-    
-    import time
-    print('>>RUNNING DUMMUY ANALYSIS...')
-    time.sleep(30)
-    # assert False, 'ERROR: Analysis failed'
-    print('...FINISHED')
-    
-    return
-
 
 def main():
     
@@ -27,7 +18,7 @@ def main():
         sys.exit(2)
     
     # Load simulation table
-    sims = pandas.read_pickle(args[0])
+    sims = pd.read_pickle(args[0])
     
     # Load analysis parameters
     with open(args[1], 'r') as f:
@@ -52,7 +43,7 @@ def main():
         plt.xlim((t_start, t_end))
         plt.title(cond_dict)
         if not groupby is None:
-            plt.legend(title=groupby)
+            plt.legend(title=groupby, loc='upper right')
         file_name = 'spikes__' + '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) + '.png'
         fig.savefig(os.path.join(out_root, file_name), dpi=300)
 

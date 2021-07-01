@@ -4,8 +4,8 @@
 
 import os
 import json
-import subprocess
 import numpy as np
+import subprocess
 from luigi import Task, Parameter, ListParameter, DictParameter
 from bbp_workflow.simulation import LookupSimulationCampaign
 from bbp_workflow.utils import xr_from_dict
@@ -27,7 +27,9 @@ class CampaignAnalysisLauncher(Task):
         config = xr_from_dict(sim_campaign_cfg.configuration.as_dict())  # Get sim campaign config as Xarray
         root_path = os.path.join(config.attrs['path_prefix'], config.name) # Root path of simulation campaign
         sim_paths = config.to_series() # Single simulation paths as Pandas series with multi-index
-        assert os.path.commonpath(sim_paths.tolist()) == root_path, 'ERROR: Root path mismatch!'
+        print(os.path.commonpath(sim_paths.tolist()))
+        print(root_path)
+        assert os.path.commonpath(sim_paths.tolist() + [root_path]) == root_path, 'ERROR: Root path mismatch!'
         
         print(f'\nINFO: Loaded simulation campaign "{sim_campaign_cfg.name}" from {sim_campaign_cfg.get_url()} with coordinates {list(sim_paths.index.names)}')
         
@@ -50,11 +52,12 @@ class CampaignAnalysisLauncher(Task):
         
         # Prepare & launch analyses, as specified in launch config
         num_analyses = len(self.list_of_analyses)
-        print(f'INFO: {num_analyses} campaign analyses to launch: {[anlys["name"] for anlys in self.list_of_analyses]}\n')
+        print(f'INFO: {num_analyses} campaign {"analysis" if num_analyses == 1 else "analyses"} to launch: {[anlys["name"] for anlys in self.list_of_analyses]}')
         
         analysis_tasks = []
         for anlys in self.list_of_analyses:
             anlys_name = anlys['name']
+            anlys_repo = anlys['repository']
             anlys_script = anlys['script']
             anlys_params = dict(anlys['parameters'])
             anlys_res = anlys['resources']
@@ -71,19 +74,21 @@ class CampaignAnalysisLauncher(Task):
                 json.dump(anlys_params, f, indent=2)
             
             # Download script from GIT repository to script_path
+            # [WORKAROUND: Needs to be launched on BB5, so that git is available]
             script_name = os.path.split(anlys_script)[-1]
             script_file = os.path.join(script_path, script_name)
-            # TODO...
-#             if os.path.isfile(script_file):
-#                 os.remove(script_file) # Remove if already exists
-#             proc = subprocess.Popen(f'wget -P {script_path} {anlys_script}', shell=True, stdout=subprocess.PIPE)
-#             print(proc.communicate()[0].decode())
+            if os.path.isfile(script_file):
+                os.remove(script_file) # Remove if already exists
+            folder_depth = len(os.path.normpath(os.path.split(anlys_script)[0]).lstrip(os.path.sep).split(os.path.sep)) # To get rid of subfolders
+            proc = subprocess.Popen(f'git archive --remote={anlys_repo} HEAD {anlys_script} | tar -x --strip-components={folder_depth} --directory={script_path} {anlys_script}', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            print(proc.communicate()[0].decode())
+            assert os.path.isfile(script_file), 'ERROR: Script file missing!'
             
             # Prepare tasks
             cmd = f'python -u {script_name}'
             args = f'{os.path.join(os.path.relpath(launch_path, script_path), sim_file)} {param_file}'
             module_archive = anlys.get('module_archive', 'unstable')
-            modules = anlys.get('modules', 'python') # Loading latest Python module by default
+            modules = anlys.get('modules', 'python py-bluepy') # Loading latest Python and BluePy modules by default
             anlys_res = {k: str(v) for k, v in anlys_res.items()} # Convert values to str, to avoid warning from parameter parser when directly passing whole "resources" dict
             analysis_tasks.append(CampaignAnalysis(name=anlys_name, chdir=script_path, command=cmd, args=args, module_archive=module_archive, modules=modules, **anlys_res))
         
@@ -102,12 +107,9 @@ class CampaignAnalysis(SbatchTask):
     
     def run(self):
         print(f'\nINFO: Running campaign analysis task "{self.name}"\n')
-        print(f'Command: {self.command} {self.args}') # [TESTING]
-        print(f'Modules: {self.module_archive} {self.modules}') # [TESTING]
-        
+
         self.job_name = 'CampaignAnalysis[' + self.name + ']'
-        
-        #super().run()
+        super().run()
         
         self.output().done()
     
