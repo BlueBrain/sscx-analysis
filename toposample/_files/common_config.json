@@ -1,0 +1,127 @@
+{
+  "paths":{
+    "inputs": {
+      "dir": "../data/input_data",
+      "files": {
+        "adjacency_matrix": "connectivity.npz",
+        "neuron_info": "neuron_info.pickle",
+        "raw_spikes": "raw_spikes.npy",
+        "stimuli": "stim_stream.npy"
+      }
+    },
+    "analyzed": {
+      "dir": "../data/analyzed_data",
+      "files": {
+        "split_spikes": "split_spike_trains.npy",
+        "database": "community_database.pkl",
+        "tribes": "tribes.json",
+        "struc_parameters": "structural_parameters.json",
+        "struc_parameters_volumetric": "structural_parameters_vol.json",
+        "components": "extracted_components.json",
+        "features": "features.json",
+        "classifier_components_results": "classifier_manifold_results.json",
+        "classifier_features_results": "classifier_features_results.json",
+        "triads": "triads.json"
+      }
+    },
+    "other": {
+      "dir": "../data/other"
+    },
+    "config": {
+      "dir": ".",
+      "files": {
+        "split_spikes": "input_data_config.json",
+        "classifier": "classifier_config.json",
+        "ec_analysis": "ec_analysis_config.json",
+        "gen_topo_db": "topo_db_config.json",
+        "manifold_analysis": "manifold_config.json",
+        "topological_featurization": "featurization_config.json",
+        "sample_tribes": "sampling_config.json",
+        "struc_tribe_analysis": "structural_analysis_config.json",
+        "count_triads": "triad_config.json"
+      }
+    }
+  },
+  "structure": {
+      "split_spikes": {
+          "inputs": {
+              "raw_spikes": "inputs",
+              "stimuli": "inputs"
+          },
+          "outputs": {
+              "split_spikes": "analyzed"
+          }
+      },
+      "gen_topo_db": {
+          "inputs": {
+              "adjacency_matrix": "inputs",
+              "neuron_info": "inputs",
+              "raw_spikes": "inputs"
+          },
+          "outputs": {
+              "database": "analyzed"
+          }
+      },
+      "sample_tribes": {
+          "inputs": {
+              "database": "analyzed"
+          },
+          "outputs": {
+              "tribes": "analyzed"
+          }
+      },
+      "struc_tribe_analysis": {
+          "inputs": {
+              "database": "analyzed",
+              "tribes": "analyzed",
+              "neuron_info": "inputs",
+              "adjacency_matrix": "inputs"
+          },
+          "outputs": {
+              "struc_parameters": "analyzed",
+              "struc_parameters_volumetric": "analyzed"
+          }
+      },
+      "count_triads": {
+          "inputs": {
+              "adjacency_matrix": "inputs",
+              "neuron_info": "inputs",
+              "tribes": "analyzed"
+          },
+          "outputs": {
+              "triads": "analyzed"
+          }
+      },
+      "manifold_analysis": {
+          "inputs": {
+             "raw_spikes": "inputs",
+             "stimuli": "inputs",
+             "tribes": "analyzed"
+          },
+          "outputs": {
+             "components": "analyzed"
+          }
+      },
+      "topological_featurization": {
+          "inputs": {
+            "split_spikes": "analyzed",
+            "adjacency_matrix": "inputs",
+            "neuron_info": "inputs",
+            "tribes": "analyzed"
+          },
+          "outputs": {
+            "features": "analyzed"
+          }
+      },
+      "classifier": {
+          "inputs": {
+             "features": "analyzed",
+             "components": "analyzed"
+          },
+          "outputs": {
+             "classifier_features_results": "analyzed",
+             "classifier_components_results": "analyzed"
+          }
+      }
+  }
+}
