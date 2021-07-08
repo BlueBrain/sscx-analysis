@@ -1,3 +1,6 @@
 # SSCx-Analysis
 
-Repository initially for creating tickets for SSCx analysis. Repository later to be used for collating analyses.
+Repository for collating SSCx analyses.
+
+JIRA board:
+> https://bbpteam.epfl.ch/project/issues/secure/RapidBoard.jspa?rapidView=283
