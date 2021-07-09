@@ -34,9 +34,9 @@ def initial_setup(sims):
     for cond, path in sims.iteritems():
         cond_dict = dict(zip(conditions, cond))
         value = bluepy.Simulation(path)
-        circ_hash = hashlib.md5(str(sim.circuit.config).encode("UTF-8")).hexdigest()
+        circ_hash = hashlib.md5(str(value.circuit.config).encode("UTF-8")).hexdigest()
         if circ_hash not in circuit_dict:
-            circuit_dict[circ_hash] = sim.circuit
+            circuit_dict[circ_hash] = value.circuit
         out.append(spa.ResultsWithConditions(value, circuit_hash=circ_hash,
                                              **cond_dict))
     return spa.ConditionCollection(out), circuit_dict
