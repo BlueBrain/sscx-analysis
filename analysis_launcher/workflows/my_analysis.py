@@ -25,8 +25,8 @@ def main():
         params = json.load(f)
     
     # Get params
-    out_root = params.get('out_root')
-    assert not out_root is None, 'ERROR: Output root folder not specified!'
+    output_root = params.get('output_root')
+    assert not output_root is None, 'ERROR: Output root folder not specified!'
     groupby = params.get('groupby')
     
     # Run analysis (= simple spike raster plotting)
@@ -45,7 +45,7 @@ def main():
         if not groupby is None:
             plt.legend(title=groupby, loc='upper right')
         file_name = 'spikes__' + '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) + '.png'
-        fig.savefig(os.path.join(out_root, file_name), dpi=300)
+        fig.savefig(os.path.join(output_root, file_name), dpi=300)
 
 
 if __name__ == "__main__":

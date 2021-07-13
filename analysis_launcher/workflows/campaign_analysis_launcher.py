@@ -6,11 +6,22 @@ import os
 import json
 import numpy as np
 import subprocess
+from collections.abc import Mapping
 from luigi import Task, Parameter, ListParameter, DictParameter
 from bbp_workflow.simulation import LookupSimulationCampaign
 from bbp_workflow.utils import xr_from_dict
 from bbp_workflow.luigi import RunAnywayTarget
 from bbp_workflow.task import SbatchTask
+
+
+""" Helper function to recursively unfreeze and convert Luigi's FrozenOrderedDict parameter objects to regular dicts """
+def unfreeze_recursively(value):
+    if isinstance(value, Mapping):
+        return {k: unfreeze_recursively(v) for k, v in value.items()}
+    elif isinstance(value, list) or isinstance(value, tuple):
+        return [unfreeze_recursively(v) for v in value]
+    return value
+
 
 """ Campaign analysis launcher, preparing config files and launching separate analysis tasks as specified """
 class CampaignAnalysisLauncher(Task):
@@ -59,22 +70,26 @@ class CampaignAnalysisLauncher(Task):
             anlys_name = anlys['name']
             anlys_repo = anlys['repository']
             anlys_script = anlys['script']
-            anlys_params = dict(anlys['parameters'])
+            anlys_params = unfreeze_recursively(anlys['parameters'])
             anlys_res = anlys['resources']
             
-            # Create script folder
+            # Create script and output folders
             script_path = os.path.join(launch_path, 'scripts', anlys_name)
             if not os.path.exists(script_path):
                 os.makedirs(script_path)
+            output_path = os.path.join(launch_path, 'output', anlys_name)
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
             
             # Write parameters
-            anlys_params['out_root'] = script_path
+            anlys_params['output_root'] = output_path
             param_file = 'parameters.json'
             with open(os.path.join(script_path, param_file), 'w') as f:
                 json.dump(anlys_params, f, indent=2)
             
             # Download script from GIT repository to script_path
             # [WORKAROUND: Needs to be launched on BB5, so that git is available]
+            # TODO: Clone whole GIT repository, in case analysis script has dependencies!
             script_name = os.path.split(anlys_script)[-1]
             script_file = os.path.join(script_path, script_name)
             if os.path.isfile(script_file):
@@ -88,7 +103,7 @@ class CampaignAnalysisLauncher(Task):
             cmd = f'python -u {script_name}'
             args = f'{os.path.join(os.path.relpath(launch_path, script_path), sim_file)} {param_file}'
             module_archive = anlys.get('module_archive', 'unstable')
-            modules = anlys.get('modules', 'python py-bluepy') # Loading latest Python and BluePy modules by default
+            modules = 'python py-bluepy ' + anlys.get('modules', '') # Loading Python and BluePy modules by default
             anlys_res = {k: str(v) for k, v in anlys_res.items()} # Convert values to str, to avoid warning from parameter parser when directly passing whole "resources" dict
             analysis_tasks.append(CampaignAnalysis(name=anlys_name, chdir=script_path, command=cmd, args=args, module_archive=module_archive, modules=modules, **anlys_res))
         
