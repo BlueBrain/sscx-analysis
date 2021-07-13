@@ -65,9 +65,11 @@ def initial_setup(sims):
     for cond, path in sims.iteritems():
         cond_dict = dict(zip(conditions, cond))
         value = bluepy.Simulation(path)
-        circ_hash = hashlib.md5(str(sim.circuit.config).encode("UTF-8")).hexdigest()
+        cfg = value.circuit.config.copy()
+        cfg.pop("targets", None)
+        circ_hash = hashlib.md5(str(cfg).encode("UTF-8")).hexdigest()
         if circ_hash not in circuit_dict:
-            circuit_dict[circ_hash] = sim.circuit
+            circuit_dict[circ_hash] = value.circuit
         out.append(spa.ResultsWithConditions(value, circuit_hash=circ_hash,
                                              **cond_dict))
     return spa.ConditionCollection(out), circuit_dict
@@ -82,29 +84,45 @@ def read_time_windows(sim):
     """
     :param sim: bluepy.Simulation
     :return: stim_ids, a numpy.array of length L, with integers between [0, n_stim]. Specifying the identity of stimuli
-             t_wins, a numpy.array of length L+1, where t_wins[i:i+1] is the start and end time of the response to
-             stimulus stim_ids[i]
+             t_wins, a numpy.array of shape L x 2, where t_wins[i, 0] and t_wins[i, 1] are the start and end time of
+             the response to stimulus stim_ids[i]
     """
-    raise NotImplementedError()
+    t_wins = numpy.array([[0.0, float(sim.config.Run["Duration"])]])
+    stim_ids = numpy.array([0])
+
+    json_fn = os.path.join(sim.config.Run["OutputRoot"], "BlueConfig.json")
+    if os.path.exists(json_fn):
+        import json
+        with open(json_fn, "r") as fid:
+            data = json.load(fid)
+        if "stim_t_wins" in data:
+            t_wins = numpy.array(data["stim_t_wins"])
+            assert t_wins.ndim == 2 and t_wins.shape[1] == 2
+            stim_ids = numpy.array(data.get("stim_ids", [0] * len(t_wins)))
+            assert len(stim_ids) == len(t_wins)
+    return stim_ids, t_wins
 
 
 def concatenate_sims(lst_spikes_stims):
     spikes, stims = zip(*lst_spikes_stims)
     stim_ids, t_wins = zip(*stims)
 
+    t_win_width = numpy.diff(numpy.vstack(t_wins), axis=1)
+    assert len(numpy.unique(t_win_width)) == 1, "All time windows must be equal size!"
+    t_win_width = t_win_width[0]
+
     out_spikes = []
     t = 0.0
     # TODO: Someone review this logic....
     for spk, t_win in zip(spikes, t_wins):
-        for a, b in zip(t_win[:-1], t_win[1:]):
+        for a, b in t_win:
             in_win = (spk[:, 0] >= a) & (spk[:, 0] < b)
             spk[in_win, 0] = spk[in_win, 0] - a + t
             out_spikes.append(spk[in_win])
-            t += (b - a)
+            t += t_win_width
     out_stims = numpy.hstack(stim_ids)
     out_spikes = numpy.vstack(out_spikes)
-    assert len(out_stims) == len(out_spikes)
-    return out_stims, out_spikes
+    return out_stims, out_spikes, t_win_width
 
 
 def get_neuron_info(circ, group, sim_target):
@@ -167,15 +185,16 @@ def main():
     sim_target = sim_target[0]
 
     neuron_info = get_neuron_info(circuit, cfg["base_target"], sim_target)
-    con_mat = get_con_mat(circ, neuron_info, cfg.get("projections", []))
+    con_mat = get_con_mat(circuit, neuron_info, cfg.get("projections", []))
     write_structural_info(neuron_info, con_mat, common_cfg)
 
     spikes = sim_struc.map(read_spikes)
     stim_t_wins = sim_struc.map(read_time_windows)
 
-    spikes_n_stims = spikes.extended_map([stim_t_wins], tuple, iterate_inner=True)
+    spikes_n_stims = spikes.extended_map(lambda *args: tuple(args), [stim_t_wins], iterate_inner=True)
     spikes_n_stims = spikes_n_stims.pool(cfg["pool_conditions"], func=concatenate_sims)
 
     assert len(spikes_n_stims.get()) == 1, "Need to pool or filter more?"
-    stims, spikes = spikes_n_stims.get2()
+    stims, spikes, t_win_width = spikes_n_stims.get2()
+    # TODO: Write t_win_width parameter to the "extract_time_windows" config.
     write_simulation_results(stims, spikes, common_cfg)
