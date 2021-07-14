@@ -38,8 +38,9 @@ class CampaignAnalysisLauncher(Task):
         config = xr_from_dict(sim_campaign_cfg.configuration.as_dict())  # Get sim campaign config as Xarray
         root_path = os.path.join(config.attrs['path_prefix'], config.name) # Root path of simulation campaign
         sim_paths = config.to_series() # Single simulation paths as Pandas series with multi-index
-        print(os.path.commonpath(sim_paths.tolist()))
-        print(root_path)
+        if not os.path.isabs(os.path.commonpath(sim_paths.tolist())): # Create absolute paths, if necessary
+            for idx in range(sim_paths.shape[0]):
+                sim_paths.iloc[idx] = os.path.join(os.path.split(root_path)[0], sim_paths.iloc[idx])
         assert os.path.commonpath(sim_paths.tolist() + [root_path]) == root_path, 'ERROR: Root path mismatch!'
         
         print(f'\nINFO: Loaded simulation campaign "{sim_campaign_cfg.name}" from {sim_campaign_cfg.get_url()} with coordinates {list(sim_paths.index.names)}')
