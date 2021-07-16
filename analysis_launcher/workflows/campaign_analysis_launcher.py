@@ -13,6 +13,8 @@ from bbp_workflow.utils import xr_from_dict
 from bbp_workflow.luigi import RunAnywayTarget
 from bbp_workflow.task import SbatchTask
 
+DEFAULT_ARCHIVE = 'unstable'
+DEFAULT_MODULES = 'python py-bluepy'
 
 """ Helper function to recursively unfreeze and convert Luigi's FrozenOrderedDict parameter objects to regular dicts """
 def unfreeze_recursively(value):
@@ -50,21 +52,17 @@ class CampaignAnalysisLauncher(Task):
         sim_paths = sim_paths[valid_sims]
         
         print(f'INFO: Found {np.sum(valid_sims)} of {len(valid_sims)} completed simulations to analyze')
-        
+                
         # Create simulation paths to BlueConfigs
         sims = sim_paths.apply(lambda p: os.path.join(p, 'BlueConfig'))
         assert np.all([os.path.exists(s) for s in sims.values.flatten()]), 'ERROR: BlueConfig(s) missing!'
         
-        # Write simulation file to analyses folder
-        launch_path = os.path.join(root_path, 'analyses')
-        if not os.path.exists(launch_path):
-            os.makedirs(launch_path)
-        sim_file = 'simulations.pkl'
-        sims.to_pickle(os.path.join(launch_path, sim_file))
-        
         # Prepare & launch analyses, as specified in launch config
         num_analyses = len(self.list_of_analyses)
         print(f'INFO: {num_analyses} campaign {"analysis" if num_analyses == 1 else "analyses"} to launch: {[anlys["name"] for anlys in self.list_of_analyses]}')
+        launch_path = os.path.join(root_path, 'analyses')
+        if not os.path.exists(launch_path):
+            os.makedirs(launch_path)
         
         analysis_tasks = []
         for anlys in self.list_of_analyses:
@@ -82,7 +80,21 @@ class CampaignAnalysisLauncher(Task):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
             
-            # Write parameters
+            # Apply conditions filter to apply the analysis only on a subset of simulation conditions (optional)
+            cond_filter = anlys.get("condition_filter", {})
+            sims_filt = sims.copy()
+            for k, v in cond_filter.items():
+                assert k in sims_filt.index.names, f'ERROR: Condition {k} not found for filtering in "{anlys_name}" analysis! Conditions: {sims_filt.index.names}'
+                sims_filt = sims_filt[np.isin(sims_filt.index.get_level_values(k), v)]
+            assert sims_filt.size > 0, f'ERROR: No simulations left for "{anlys_name}" analysis after condition filtering!'
+            if sims_filt.size < sims.size:
+                print(f'INFO: Selected {sims_filt.size} of {sims.size} simulations for "{anlys_name}" analysis')
+            
+            # Write simulation file
+            sim_file = 'simulations.pkl'
+            sims_filt.to_pickle(os.path.join(script_path, sim_file))
+            
+            # Write analysis parameters
             anlys_params['output_root'] = output_path
             param_file = 'parameters.json'
             with open(os.path.join(script_path, param_file), 'w') as f:
@@ -91,6 +103,7 @@ class CampaignAnalysisLauncher(Task):
             # Download script from GIT repository to script_path
             # [WORKAROUND: Needs to be launched on BB5, so that git is available]
             # TODO: Clone whole GIT repository, in case analysis script has dependencies!
+            #       Create/use venv in case of specific dependencies that are not part of a module
             script_name = os.path.split(anlys_script)[-1]
             script_file = os.path.join(script_path, script_name)
             if os.path.isfile(script_file):
@@ -102,9 +115,9 @@ class CampaignAnalysisLauncher(Task):
             
             # Prepare tasks
             cmd = f'python -u {script_name}'
-            args = f'{os.path.join(os.path.relpath(launch_path, script_path), sim_file)} {param_file}'
-            module_archive = anlys.get('module_archive', 'unstable')
-            modules = 'python py-bluepy ' + anlys.get('modules', '') # Loading Python and BluePy modules by default
+            args = f'{sim_file} {param_file}'
+            module_archive = anlys.get('module_archive', DEFAULT_ARCHIVE)
+            modules = (DEFAULT_MODULES + ' ' + anlys.get('modules', '')).strip()
             anlys_res = {k: str(v) for k, v in anlys_res.items()} # Convert values to str, to avoid warning from parameter parser when directly passing whole "resources" dict
             analysis_tasks.append(CampaignAnalysis(name=anlys_name, chdir=script_path, command=cmd, args=args, module_archive=module_archive, modules=modules, **anlys_res))
         
