@@ -3,6 +3,7 @@
 # Created: 28/06/2021
 
 import os
+import shutil
 import json
 import numpy as np
 import subprocess
@@ -68,6 +69,7 @@ class CampaignAnalysisLauncher(Task):
         for anlys in self.list_of_analyses:
             anlys_name = anlys['name']
             anlys_repo = anlys['repository']
+            anlys_checkout = anlys['checkout_id']
             anlys_script = anlys['script']
             anlys_params = unfreeze_recursively(anlys['parameters'])
             anlys_res = anlys['resources']
@@ -100,21 +102,23 @@ class CampaignAnalysisLauncher(Task):
             with open(os.path.join(script_path, param_file), 'w') as f:
                 json.dump(anlys_params, f, indent=2)
             
-            # Download script from GIT repository to script_path
+            # Clone GIT repository to script_path, using branch/tag/hash as specified
             # [WORKAROUND: Needs to be launched on BB5, so that git is available]
-            # TODO: Clone whole GIT repository, in case analysis script has dependencies!
-            #       Create/use venv in case of specific dependencies that are not part of a module
-            script_name = os.path.split(anlys_script)[-1]
-            script_file = os.path.join(script_path, script_name)
-            if os.path.isfile(script_file):
-                os.remove(script_file) # Remove if already exists
-            folder_depth = len(os.path.normpath(os.path.split(anlys_script)[0]).lstrip(os.path.sep).split(os.path.sep)) # To get rid of subfolders
-            proc = subprocess.Popen(f'git archive --remote={anlys_repo} HEAD {anlys_script} | tar -x --strip-components={folder_depth} --directory={script_path} {anlys_script}', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            # TODO: Create/use venv in case of specific dependencies that are not part of the repository or a module
+            repo_name = os.path.splitext(os.path.split(anlys_repo)[-1])[0]
+            repo_path = os.path.join(script_path, repo_name)
+            if os.path.exists(repo_path):
+                shutil.rmtree(repo_path, ignore_errors=True) # Remove if already exists
+            proc = subprocess.Popen(f'cd {script_path};\
+                                      git clone --no-checkout {anlys_repo};\
+                                      cd {repo_name};\
+                                      git checkout {anlys_checkout}', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             print(proc.communicate()[0].decode())
-            assert os.path.isfile(script_file), 'ERROR: Script file missing!'
+            script_file = os.path.join(repo_name, anlys_script) # Path relative to script_path
+            assert os.path.isfile(os.path.join(script_path, script_file)), 'ERROR: Script file not found!'
             
             # Prepare tasks
-            cmd = f'python -u {script_name}'
+            cmd = f'python -u {script_file}'
             args = f'{sim_file} {param_file}'
             module_archive = anlys.get('module_archive', DEFAULT_ARCHIVE)
             modules = (DEFAULT_MODULES + ' ' + anlys.get('modules', '')).strip()
