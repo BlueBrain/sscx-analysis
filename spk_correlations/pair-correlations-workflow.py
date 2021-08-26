@@ -98,6 +98,46 @@ def create_gid_dict(circ_dict, type_definitions, base_target, max_per_population
     return out
 
 
+def partial_cmat(circ, gids_a, gids_b):
+    import h5py
+    idx_pre = numpy.array(gids_a) - 1
+    idx_post = numpy.array(gids_b) - 1
+    h5 = h5py.File(circ.config["connectome"], "r")['edges/default']
+    # h5 = h5py.File(circ.config.Run.nrnPath, "r")['edges/default']
+    N = len(gids_a)
+    M = len(gids_b)
+
+    indices = []
+    indptr = [0]
+    for id_post in tqdm.tqdm(idx_post):
+        ids_pre = []
+        ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
+        for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
+            ids_pre.append(h5['source_node_id'][block[0]:block[1]])
+        row_ids = numpy.nonzero(numpy.in1d(idx_pre, numpy.hstack(ids_pre)))[0]
+        indices.extend(row_ids)
+        indptr.append(len(indices))
+    mat = sparse.csc_matrix((numpy.ones(len(indices), dtype=bool), indices, indptr), shape=(N, M))
+    return mat
+
+
+def create_cmat_dict(circ_dict, gid_dict):
+    out = {}
+
+    for circ_hash, circ in circ_dict.items():
+        print("Getting connectivity of circuit {0}".format(circ_hash))
+        neuron_types = list(gid_dict[circ_hash].keys())
+        gids = [gid_dict[circ_hash][k] for k in neuron_types]
+        splts = numpy.cumsum([0] + [len(_x) for _x in gids])
+        gids = numpy.hstack(gids)
+        for type_b in neuron_types:
+            print("...connectivity to {0}...".format(str(type_b)))
+            full_m = partial_cmat(circ, gids, gid_dict[circ_hash][type_b])
+            for type_a, splt_fr, splt_to in zip(neuron_types, splts[:-1], splts[1:]):
+                out.setdefault(circ_hash, {})[(type_a, type_b)] = full_m[splt_fr:splt_to].tocoo()
+    return out
+
+
 def split_spikes_factory(target_gid_dicts):
     def split_spikes(circ_fns, spks_in):
         for circ, spks in zip(circ_fns, spks_in):
@@ -105,7 +145,7 @@ def split_spikes_factory(target_gid_dicts):
             gid_dict = target_gid_dicts[circ]
             for label, gids in tqdm.tqdm(gid_dict.items()):
                 valid = numpy.in1d(spks[:, 1], gids)
-                yield (spks[valid], spk_win, gids), {"circuit_config": circ, "neuron_type": label}
+                yield (spks[valid], spk_win, gids), {"circuit_hash": circ, "neuron_type": label}
     return split_spikes
 
 
@@ -139,18 +179,39 @@ def spikes_to_binned_matrix(spk_data, t_step, shuffle=False, randomize_t=False, 
     return M
 
 
-def pair_correlation_payload(m1, m2, nrmlz1, nrmlz2, corr_bins, disable_diagonal=False):
+def pair_correlation_payload(m1, m2, nrmlz1, nrmlz2):
     raw = numpy.dot(m1, m2.transpose())
     nrmlz = numpy.sqrt(numpy.dot(nrmlz1, nrmlz2.transpose())) * m1.shape[1]
     ret = raw / nrmlz
-    if disable_diagonal:
-        h = numpy.histogram(ret[numpy.triu_indices_from(ret, 1)], bins=corr_bins, density=True)[0]
+    return ret
+
+
+def correlation_histograms(m, con_mat1, con_mat2, nrn_type1, nrn_type2, corr_bins):
+    ret = []; conds = []
+    v = m[con_mat1.row, con_mat1.col]
+    ret.append(numpy.histogram(v, bins=corr_bins)[0])
+    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "positive"})
+    ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
+    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "negative"})
+    if nrn_type1 != nrn_type2:
+        v = m[con_mat2.col, con_mat2.row]
+        ret.append(numpy.histogram(v, bins=corr_bins)[0])
+        conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "positive"})
+        ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
+        conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "negative"})
+
+        v = m.flat
     else:
-        h = numpy.histogram(ret.flat, bins=corr_bins, density=True)[0]
-    return h
+        v = m[numpy.triu_indices_from(m, 1)]
+    ret.append(numpy.histogram(v, bins=corr_bins)[0])
+    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "all", "side": "positive"})
+    ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
+    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "all", "side": "negative"})
+
+    return ret, conds
 
 
-def pair_correlation_factory(t_step=20.0):
+def pair_correlation_factory(cmat_dict, t_step=20.0):
     corr_bins = numpy.linspace(-1, 1, 201) # TODO: Configurable
 
 
@@ -161,12 +222,14 @@ def pair_correlation_factory(t_step=20.0):
         lst_nrmlz = [m.var(axis=1, keepdims=True) for m in lst_M]
         i = 0
         for nrn_type1, m1, nrmlz1 in zip(lst_nrn_types, lst_M, lst_nrmlz):
-            disable_diagonal = True
             for nrn_type2, m2, nrmlz2 in zip(lst_nrn_types[i:], lst_M[i:], lst_nrmlz[i:]):
+                cmat1 = cmat_dict[(nrn_type1, nrn_type2)]
+                cmat2 = cmat_dict[(nrn_type2, nrn_type1)]
                 print("\tCorrelating {0} and {1}".format(str(nrn_type1), str(nrn_type2)))
-                v = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2, corr_bins, disable_diagonal=disable_diagonal)
-                disable_diagonal = False
-                yield v, {"run": "data", "type_1": nrn_type1, "type_2": nrn_type2}
+                m = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2)
+                for v, cond in zip(*correlation_histograms(m, cmat1, cmat2, nrn_type1, nrn_type2, corr_bins)):
+                    cond["run"] = "data"
+                    yield v, cond
             i += 1
 
         print("Calculating randomized binned spiking matrices...") # TODO: Configure number and type of control
@@ -174,12 +237,14 @@ def pair_correlation_factory(t_step=20.0):
         lst_nrmlz = [m.var(axis=1, keepdims=True) for m in lst_M]
         i = 0
         for nrn_type1, m1, nrmlz1 in zip(lst_nrn_types, lst_M, lst_nrmlz):
-            disable_diagonal = True
             for nrn_type2, m2, nrmlz2 in zip(lst_nrn_types[i:], lst_M[i:], lst_nrmlz[i:]):
+                cmat1 = cmat_dict[(nrn_type1, nrn_type2)]
+                cmat2 = cmat_dict[(nrn_type2, nrn_type1)]
                 print("\tCorrelating {0} and {1}".format(str(nrn_type1), str(nrn_type2)))
-                v = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2, corr_bins, disable_diagonal=disable_diagonal)
-                disable_diagonal = False
-                yield v, {"run": "randomized", "type_1": nrn_type1, "type_2": nrn_type2}
+                m = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2)
+                for v, cond in zip(*correlation_histograms(m, cmat1, cmat2, nrn_type1, nrn_type2, corr_bins)):
+                    cond["run"] = "control"
+                    yield v, cond
             i += 1
     return pair_correlations
 
@@ -207,14 +272,21 @@ def main():
     target_gid_dicts = create_gid_dict(circ_dict, cfg["neuron_classes"], cfg.get("base_target", "Mosaic"),
                                        max_per_population=cfg.get("max_per_population", None))
 
+    # Get connectivity
+    cmat_dict = create_cmat_dict(circ_dict, target_gid_dicts)
+
     # Split spike results into individual results for the different classes
     spikes_per_target = spikes.transform(["circuit_hash"], split_spikes_factory(target_gid_dicts), xy=True)
 
     # Execute...
-    correlation_res = spikes_per_target.transform(["neuron_type"], pair_correlation_factory(binsize), xy=True)
-    correlation_res.add_label("time_bin_size", binsize)
+    correlation_res = spa.ConditionCollection([])
+    for circ_hash in spikes_per_target.labels_of("circuit_hash"):
+        func = pair_correlation_factory(cmat_dict[circ_hash], t_step=binsize)
+        tmp_res = spikes_per_target.filter(circuit_hash=circ_hash).transform(["neuron_type"], func, xy=True)
+        correlation_res.merge(tmp_res)
 
-    correlation_res.to_pandas().agg(lambda x: x).to_pickle(os.path.join(out_fn, "results.pkl"))
+    correlation_res.add_label("time_bin_size", binsize)
+    correlation_res.to_pandas().to_pickle(os.path.join(out_fn, "results.pkl"))
 
 
 if __name__ == "__main__":
