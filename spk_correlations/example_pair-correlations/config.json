@@ -1,0 +1,107 @@
+{
+  "output_root": "./results_neg",
+  "condition_filter": {
+    "ca": 1.2
+  },
+  "pool_spikes": {
+    "conditions": [
+      "seed"
+    ],
+    "t_win": [
+      5000,
+      45000
+    ]
+  },
+  "neuron_classes": {
+    "L2_EXC": {
+      "layer": [
+        2
+      ],
+      "synapse_class": [
+        "EXC"
+      ]
+    },
+    "L3_EXC": {
+      "layer": [
+        3
+      ],
+      "synapse_class": [
+        "EXC"
+      ]
+    },
+    "L4_EXC": {
+      "layer": [
+        4
+      ],
+      "synapse_class": [
+        "EXC"
+      ]
+    },
+    "L5_EXC": {
+      "layer": [
+        5
+      ],
+      "synapse_class": [
+        "EXC"
+      ]
+    },
+    "L6_EXC": {
+      "layer": [
+        6
+      ],
+      "synapse_class": [
+        "EXC"
+      ]
+    },
+    "L1_INH": {
+      "layer": [
+        1
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    },
+    "L2_INH": {
+      "layer": [
+        2
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    },
+    "L3_INH": {
+      "layer": [
+        3
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    },
+    "L4_INH": {
+      "layer": [
+        4
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    },
+    "L5_INH": {
+      "layer": [
+        5
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    },
+    "L6_INH": {
+      "layer": [
+        6
+      ],
+      "synapse_class": [
+        "INH"
+      ]
+    }
+  },
+  "max_per_population": 5000,
+  "base_target": "hex0"
+}
