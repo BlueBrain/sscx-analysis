@@ -188,18 +188,19 @@ def pair_correlation_payload(m1, m2, nrmlz1, nrmlz2):
 
 def correlation_histograms(m, con_mat1, con_mat2, nrn_type1, nrn_type2, corr_bins):
     ret = []; conds = []
-    v = m[con_mat1.row, con_mat1.col]
-    ret.append(numpy.histogram(v, bins=corr_bins)[0])
-    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "positive"})
-    ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
-    conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "negative"})
-    if nrn_type1 != nrn_type2:
-        v = m[con_mat2.col, con_mat2.row]
+    if con_mat1 is not None:
+        v = m[con_mat1.row, con_mat1.col]
         ret.append(numpy.histogram(v, bins=corr_bins)[0])
-        conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "positive"})
+        conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "positive"})
         ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
-        conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "negative"})
-
+        conds.append({"type_from": nrn_type1, "type_to": nrn_type2, "sample": "connected", "side": "negative"})
+    if nrn_type1 != nrn_type2:
+        if con_mat2 is not None:
+            v = m[con_mat2.col, con_mat2.row]
+            ret.append(numpy.histogram(v, bins=corr_bins)[0])
+            conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "positive"})
+            ret.append(numpy.histogram(v, bins=-corr_bins[-1::-1])[0][-1::-1])
+            conds.append({"type_from": nrn_type2, "type_to": nrn_type1, "sample": "connected", "side": "negative"})
         v = m.flat
     else:
         v = m[numpy.triu_indices_from(m, 1)]
@@ -212,7 +213,7 @@ def correlation_histograms(m, con_mat1, con_mat2, nrn_type1, nrn_type2, corr_bin
 
 
 def pair_correlation_factory(cmat_dict, t_step=20.0):
-    corr_bins = numpy.linspace(-1, 1, 201) # TODO: Configurable
+    corr_bins = numpy.linspace(1E-9, 1, 100) # TODO: Configurable
 
 
     def pair_correlations(lst_nrn_types, lst_spk_data):
@@ -223,8 +224,8 @@ def pair_correlation_factory(cmat_dict, t_step=20.0):
         i = 0
         for nrn_type1, m1, nrmlz1 in zip(lst_nrn_types, lst_M, lst_nrmlz):
             for nrn_type2, m2, nrmlz2 in zip(lst_nrn_types[i:], lst_M[i:], lst_nrmlz[i:]):
-                cmat1 = cmat_dict[(nrn_type1, nrn_type2)]
-                cmat2 = cmat_dict[(nrn_type2, nrn_type1)]
+                cmat1 = cmat_dict.get((nrn_type1, nrn_type2), None)
+                cmat2 = cmat_dict.get((nrn_type2, nrn_type1), None)
                 print("\tCorrelating {0} and {1}".format(str(nrn_type1), str(nrn_type2)))
                 m = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2)
                 for v, cond in zip(*correlation_histograms(m, cmat1, cmat2, nrn_type1, nrn_type2, corr_bins)):
@@ -238,8 +239,8 @@ def pair_correlation_factory(cmat_dict, t_step=20.0):
         i = 0
         for nrn_type1, m1, nrmlz1 in zip(lst_nrn_types, lst_M, lst_nrmlz):
             for nrn_type2, m2, nrmlz2 in zip(lst_nrn_types[i:], lst_M[i:], lst_nrmlz[i:]):
-                cmat1 = cmat_dict[(nrn_type1, nrn_type2)]
-                cmat2 = cmat_dict[(nrn_type2, nrn_type1)]
+                cmat1 = cmat_dict.get((nrn_type1, nrn_type2), None)
+                cmat2 = cmat_dict.get((nrn_type2, nrn_type1), None)
                 print("\tCorrelating {0} and {1}".format(str(nrn_type1), str(nrn_type2)))
                 m = pair_correlation_payload(m1, m2, nrmlz1, nrmlz2)
                 for v, cond in zip(*correlation_histograms(m, cmat1, cmat2, nrn_type1, nrn_type2, corr_bins)):
@@ -273,7 +274,10 @@ def main():
                                        max_per_population=cfg.get("max_per_population", None))
 
     # Get connectivity
-    cmat_dict = create_cmat_dict(circ_dict, target_gid_dicts)
+    if cfg.get("use_connectivity", True):
+        cmat_dict = create_cmat_dict(circ_dict, target_gid_dicts)
+    else:
+        cmat_dict = dict([(k, {}) for k in circ_dict.keys()])
 
     # Split spike results into individual results for the different classes
     spikes_per_target = spikes.transform(["circuit_hash"], split_spikes_factory(target_gid_dicts), xy=True)
