@@ -64,7 +64,11 @@ class CampaignAnalysisLauncher(Task):
         launch_path = os.path.join(root_path, 'analyses')
         if not os.path.exists(launch_path):
             os.makedirs(launch_path)
-        
+
+        # Write (unfiltered; but only existing) simulation file
+        sim_file = 'simulations.pkl'
+        sims.to_pickle(os.path.join(launch_path, sim_file))
+
         analysis_tasks = []
         for anlys in self.list_of_analyses:
             anlys_name = anlys['name']
@@ -93,7 +97,6 @@ class CampaignAnalysisLauncher(Task):
                 print(f'INFO: Selected {sims_filt.size} of {sims.size} simulations for "{anlys_name}" analysis')
             
             # Write simulation file
-            sim_file = 'simulations.pkl'
             sims_filt.to_pickle(os.path.join(script_path, sim_file))
             
             # Write analysis parameters
