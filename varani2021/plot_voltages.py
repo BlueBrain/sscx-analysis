@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Plots voltage collage (of L2/3 PCs to replicate the "analysis" of Variani et al. 2021)
+Plots voltage collage (of L2/3 PCs to replicate the "analysis" of Varani et al. 2021)
 author: András Ecker, last update: 11.2021
 """
 
