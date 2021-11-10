@@ -4,6 +4,7 @@ author: András Ecker, last update: 11.2021
 """
 
 import os
+import warnings
 import pickle
 import numpy as np
 import pandas as pd
@@ -72,18 +73,21 @@ def load_patterns(project_name, seed=None):
     """Loads in patterns from saved files (pretty custom structure and has a bunch of hard coded parts)"""
     pklf_name = None
     seed_str = "seed%i" % seed if seed is not None else "seed"
-    print(seed_str)
     for f_name in os.listdir(os.path.join(SIMS_DIR, project_name, "input_spikes")):
         if f_name[-4:] == ".pkl" and seed_str in f_name and "pattern_gids" in f_name:
             pklf_name = f_name
             with open(os.path.join(SIMS_DIR, project_name, "input_spikes", pklf_name), "rb") as f:
                 pattern_gids = pickle.load(f)
     if pklf_name:
+        metadata = pklf_name.split('__')[:-1]
         for f_name in os.listdir(os.path.join(SIMS_DIR, project_name, "projections")):
-            if pklf_name.split("_nc")[0] + ".txt" == f_name:
+            if pklf_name.split("__nc")[0] + ".txt" == f_name:
                 tmp = np.loadtxt(os.path.join(SIMS_DIR, project_name, "projections", f_name))
                 gids, pos = tmp[:, 0].astype(int), tmp[:, 1:]
-        return pattern_gids, gids, pos
+                return pattern_gids, gids, pos, metadata
+            else:
+                warnings.warn("Couldn't find saved positions in %s/projections" % project_name)
+                return pattern_gids, None, None, metadata
     else:
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 

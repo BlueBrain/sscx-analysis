@@ -181,11 +181,12 @@ if __name__ == "__main__":
 
     if plt_patterns:
         if "stim_seed" not in level_names:
-            plot_patterns(*utils.load_patterns(project_name), os.path.join(FIGS_DIR, project_name, "patterns"))
+            pattern_gids, gids, pos, _ = utils.load_patterns(project_name)
+            plot_patterns(pattern_gids, gids, pos, os.path.join(FIGS_DIR, project_name, "patterns"))
         else:
             for seed in sim_paths.index.levels[level_names == "stim_seed"].to_numpy():
-                plot_patterns(*utils.load_patterns(project_name, seed),
-                              os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % seed))
+                pattern_gids, gids, pos, _ = utils.load_patterns(project_name, seed)
+                plot_patterns(pattern_gids, gids, pos, os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % seed))
 
 
 
