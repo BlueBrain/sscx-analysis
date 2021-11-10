@@ -68,11 +68,13 @@ def load_tc_gids(project_name):
     return vpm_gids, pom_gids
 
 
-def load_patterns(project_name):
+def load_patterns(project_name, seed=None):
     """Loads in patterns from saved files (pretty custom structure and has a bunch of hard coded parts)"""
     pklf_name = None
+    seed_str = "seed%i" % seed if seed is not None else "seed"
+    print(seed_str)
     for f_name in os.listdir(os.path.join(SIMS_DIR, project_name, "input_spikes")):
-        if f_name[:-4] == ".pkl" and "pattern_gids" in f_name:
+        if f_name[-4:] == ".pkl" and seed_str in f_name and "pattern_gids" in f_name:
             pklf_name = f_name
             with open(os.path.join(SIMS_DIR, project_name, "input_spikes", pklf_name), "rb") as f:
                 pattern_gids = pickle.load(f)

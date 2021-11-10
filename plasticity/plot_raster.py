@@ -161,9 +161,9 @@ def plot_patterns(pattern_gids, all_gids, pos, patterns_dir):
 
 if __name__ == "__main__":
 
-    project_name = "c52688f7-eda4-4df0-af00-85a20977c9ab"
-    t_start = 1000
-    plt_patterns = False
+    project_name = "cdf61143-0299-4a41-928d-b2cf0577d543"
+    t_start = 1500
+    plt_patterns = True
 
     sim_paths = utils.load_sim_path(project_name)
     level_names = sim_paths.index.names
@@ -180,7 +180,13 @@ if __name__ == "__main__":
         plot_raster(spike_times, spiking_gids, proj_rate_dict, raster_asthetics, t_start, t_end, fig_name)
 
     if plt_patterns:
-        plot_patterns(*utils.load_patterns(project_name), os.path.join(FIGS_DIR, project_name, "patterns"))
+        if "stim_seed" not in level_names:
+            plot_patterns(*utils.load_patterns(project_name), os.path.join(FIGS_DIR, project_name, "patterns"))
+        else:
+            for seed in sim_paths.index.levels[level_names == "stim_seed"].to_numpy():
+                plot_patterns(*utils.load_patterns(project_name, seed),
+                              os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % seed))
+
 
 
 
