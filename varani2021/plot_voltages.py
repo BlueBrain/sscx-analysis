@@ -69,10 +69,13 @@ def calc_rate(spike_times, N, t_start, t_end, bin_size):
 
 def plot_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     """Plots voltage collages of spiking and non-spiking cells"""
+    v_subtreshold_mean = np.mean(v_subtreshold, axis=1)
+    t_v = np.linspace(t_start, t_end, len(v_subtreshold_mean))
     t_rate = np.linspace(t_start, t_end, len(rate))
     xticks = np.linspace(t_start, t_end, 6).astype(int)
+
     fig = plt.figure(figsize=(20, 9))
-    gs = gridspec.GridSpec(3, 2, height_ratios=[1, 4, 15], width_ratios=[69, 1])
+    gs = gridspec.GridSpec(4, 2, height_ratios=[1, 4, 15, 1], width_ratios=[69, 1])
     ax = fig.add_subplot(gs[0, 0])
     ax.plot(t_rate, rate, color=RED)
     ax.fill_between(t_rate, np.zeros_like(t_rate), rate, color=RED, alpha=0.1)
@@ -91,9 +94,16 @@ def plot_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     cbar = plt.colorbar(i3, cax=fig.add_subplot(gs[2, 1]))
     cbar.set_label("Voltage (mV)")
     ax3.set_ylabel("Non-spiking gids")
-    ax3.set_xlabel("Time (ms)")
     ax3.set_xticks(np.linspace(0, v_subtreshold.shape[0], 6).astype(int))
     ax3.set_xticklabels(xticks)
+    ax4 = fig.add_subplot(gs[3, 0])
+    ax4.plot(t_v, v_subtreshold_mean, "k-")
+    ax4.set_xticks(xticks)
+    ax4.set_xlim(t_start, t_end)
+    ax4.set_xlabel("Time (ms)")
+    ax4.set_ylabel("V (mV)")
+    ax4.set_yticks([np.floor(np.mean(v_subtreshold_mean))])
+    sns.despine(ax=ax4)
     fig.align_ylabels()
     gs.tight_layout(fig, h_pad=0.2, w_pad=0.2)
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
