@@ -102,6 +102,7 @@ def make_histogram_function(t_bins, loc_bins, location_dframe):
     nrns_per_bin = nrns_per_bin.reshape((1,) + nrns_per_bin.shape)
 
     def spiking3dhistogram(spikes):
+        spikes = spikes.loc[numpy.in1d(spikes.values, location_dframe.index.values)]
         t = spikes.index.values
         loc = location_dframe.loc[spikes].values
         raw, _ = numpy.histogramdd((t, loc[:, 0], loc[:, 1]), bins=(t_bins,) + loc_bins)
@@ -153,12 +154,13 @@ def main():
     out_fn = cfg.pop("output_root")
     data, circ_dict = initial_setup(sims)
 
-    assert len(circ_dict) == 1, "Simulations must use the same circuit"
-    circ = list(circ_dict.values())[0]
-
     # Specify in config to apply the analysis only to a subset of simulation conditions
     for k, v in cfg.get("condition_filter", {}).items():
         data = data.filter(**dict([(k, v)]))
+
+    assert len(data.labels_of("circuit_hash")) == 1, "Simulations must use the same circuit"
+    circ = circ_dict[data.labels_of("circuit_hash")[0]]
+
     spikes = data.map(read_spikes)
 
     # time bins
@@ -166,6 +168,8 @@ def main():
 
     # Get neuron locations and bins
     gids = numpy.unique(numpy.hstack(data.map(get_sim_gids).get()))
+    if "base_target" in cfg:
+        gids = numpy.intersect1d(gids, circ.cells.ids(cfg["base_target"]))
     locations = circ.cells.get(gids, ["x", "y", "z"])
     flat_locations = flatten_locations(locations, cfg["flatmap"])
     loc_bins = make_bins(flat_locations, cfg.get("nbins", 1000))
