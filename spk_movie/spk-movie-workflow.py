@@ -28,7 +28,7 @@ def parse_arguments():
     return sims, cfg
 
 
-def initial_setup(sims):
+def initial_setup(sims, read_input_spikes=False):
     import hashlib
     conditions = sims.index.names
     out = []
@@ -40,6 +40,8 @@ def initial_setup(sims):
         circ_hash = hashlib.md5(str(circ_cfg).encode("UTF-8")).hexdigest()
         if circ_hash not in circuit_dict:
             circuit_dict[circ_hash] = value.circuit
+        if read_input_spikes:
+            value = (value, input_spikes(path))
         out.append(spa.ResultsWithConditions(value, circuit_hash=circ_hash,
                                              **cond_dict))
     return spa.ConditionCollection(out), circuit_dict
@@ -48,6 +50,23 @@ def initial_setup(sims):
 def read_spikes(sim):
     raw_spikes = sim.spikes.get()
     return raw_spikes
+
+
+def input_spikes(sim_path):
+    # TODO: This fails if there's no input spikes
+    def read_csv(path):
+        data = pandas.read_csv(path, sep="\t")["/scatter"]
+        data.name = "gid"
+        data.index.name = "t"
+        return data
+
+    sim_root = os.path.split(sim_path)[0]
+    sim = bluepy.Simulation(sim_path)
+    stim = [stim for stim in sim.config.typed_sections("Stimulus") if stim["Pattern"] == "SynapseReplay"]
+    stim = [_stim["SpikeFile"] for _stim in stim]
+    stim = [_stim if os.path.isabs(_stim) else os.path.join(sim_root, _stim) for _stim in stim]
+    spks = pandas.concat([read_csv(_stim) for _stim in stim], axis=0)
+    return spks
 
 
 def get_sim_gids(sim):
@@ -102,6 +121,7 @@ def make_histogram_function(t_bins, loc_bins, location_dframe):
     nrns_per_bin = nrns_per_bin.reshape((1,) + nrns_per_bin.shape)
 
     def spiking3dhistogram(spikes):
+        spikes = spikes.loc[numpy.in1d(spikes.values, location_dframe.index.values)]
         t = spikes.index.values
         loc = location_dframe.loc[spikes].values
         raw, _ = numpy.histogramdd((t, loc[:, 0], loc[:, 1]), bins=(t_bins,) + loc_bins)
@@ -151,23 +171,41 @@ def plot(mn_hist, t_bins, loc_bins, out_root):
 def main():
     sims, cfg = parse_arguments()
     out_fn = cfg.pop("output_root")
-    data, circ_dict = initial_setup(sims)
-
-    assert len(circ_dict) == 1, "Simulations must use the same circuit"
-    circ = list(circ_dict.values())[0]
+    data, circ_dict = initial_setup(sims, read_input_spikes=cfg["show_inputs"])
 
     # Specify in config to apply the analysis only to a subset of simulation conditions
     for k, v in cfg.get("condition_filter", {}).items():
         data = data.filter(**dict([(k, v)]))
-    spikes = data.map(read_spikes)
+
+    if cfg["show_inputs"]:
+        spikes = data.map(lambda x: x[1])
+        data = data.map(lambda x: x[0])
+
+    assert len(data.labels_of("circuit_hash")) == 1, "Simulations must use the same circuit"
+    circ = circ_dict[data.labels_of("circuit_hash")[0]]
 
     # time bins
     t_bins = make_t_bins(sims, cfg.get("t_start", None), cfg.get("t_end", None), cfg.get("t_step", 20.0))
 
-    # Get neuron locations and bins
-    gids = numpy.unique(numpy.hstack(data.map(get_sim_gids).get()))
-    locations = circ.cells.get(gids, ["x", "y", "z"])
-    flat_locations = flatten_locations(locations, cfg["flatmap"])
+    if cfg["show_inputs"]:
+        from conntility.circuit_models import neuron_groups
+        input_props = [neuron_groups.load_projection_locations(circ, proj)
+                       for proj in circ.config["projections"].keys()]
+        input_props = pandas.concat(input_props, axis=0)
+        input_props = input_props.set_index(pandas.RangeIndex(len(input_props)))
+        input_props = neuron_groups.extra_properties.add_extra_properties(input_props, circ,
+                                                                          neuron_groups.SS_COORDINATES)
+        flat_locations = input_props.set_index("sgid")[neuron_groups.SS_COORDINATES]
+    else:
+        spikes = data.map(read_spikes)
+
+        # Get neuron locations and bins
+        gids = numpy.unique(numpy.hstack(data.map(get_sim_gids).get()))
+        if "base_target" in cfg:
+            gids = numpy.intersect1d(gids, circ.cells.ids(cfg["base_target"]))
+        locations = circ.cells.get(gids, ["x", "y", "z"])
+        flat_locations = flatten_locations(locations, cfg["flatmap"])
+
     loc_bins = make_bins(flat_locations, cfg.get("nbins", 1000))
 
     # Build histogramming function and apply
