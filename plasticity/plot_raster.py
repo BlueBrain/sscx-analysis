@@ -17,16 +17,19 @@ import matplotlib.lines as mlines
 import seaborn as sns
 
 sns.set(style="ticks", context="notebook")
-# copied from `prepare_raster_asth.py`
+# these 4 colors are copied from `prepare_raster_asth.py`
 RED = "#e32b14"
 BLUE = "#3271b8"
 GREEN = "#67b32e"
 ORANGE = "#c9a021"
+# "fake" legend for 4 cell classes
 legend_handles = [mlines.Line2D([], [], color=RED, marker="s", linestyle='None', markersize=10, label="PC"),
                   mlines.Line2D([], [], color=BLUE, marker="s", linestyle='None', markersize=10, label="PV"),
                   mlines.Line2D([], [], color=GREEN, marker="s", linestyle='None', markersize=10, label="Sst"),
                   mlines.Line2D([], [], color=ORANGE, marker="s", linestyle='None', markersize=10, label="5HT3aR")]
 PROJ_COLORS = {"VPM": "#4a4657", "POm": "#442e8a"}
+PATTERN_COLORS = {"A": "#253e92", "B": "#57b4d0", "C": "#c4a943", "D": "#7e1e18", "E": "#3f79b2",
+                  "F": "#8dad8a", "G": "#a1632e", "H": "#66939d", "I": "#97885c", "J": "#665868"}
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/sscx-analysis"
 
 
@@ -132,21 +135,20 @@ def plot_raster(spike_times, spiking_gids, proj_rate_dict, asthetics, t_start, t
 def plot_patterns(pattern_gids, all_gids, pos, patterns_dir):
     """Plots projection patterns in flatmap space"""
     utils.ensure_dir(patterns_dir)
-    cmap = plt.cm.get_cmap("tab10", 10)
     fig = plt.figure(figsize=(10, 9))
     ax = fig.add_subplot(1, 1, 1)
     ax.scatter(pos[:, 0], pos[:, 1], color="gray", marker='.', s=50, alpha=0.5)
     ax.set_xlabel("x (flat space)")
     ax.set_ylabel("y (flat space)")
     sns.despine()
-    for i, (name, gids) in enumerate(pattern_gids.items()):
+    for name, gids in pattern_gids.items():
         pattern_pos = pos[np.isin(all_gids, gids), :]
         if name in ["A", "B", "C", "D"]:
-            ax.scatter(pattern_pos[:, 0], pattern_pos[:, 1], color=cmap(i), marker='.', s=100, label=name)
+            ax.scatter(pattern_pos[:, 0], pattern_pos[:, 1], color=PATTERN_COLORS[name], marker='.', s=100, label=name)
         fig2 = plt.figure(figsize=(10, 9))
         ax2 = fig2.add_subplot(1, 1, 1)
         ax2.scatter(pos[:, 0], pos[:, 1], color="gray", marker='.', s=50, alpha=0.5)
-        ax2.scatter(pattern_pos[:, 0], pattern_pos[:, 1], color=cmap(i), marker='.', s=100)
+        ax2.scatter(pattern_pos[:, 0], pattern_pos[:, 1], color=PATTERN_COLORS[name], marker='.', s=100)
         ax2.set_xlabel("x (flat space)")
         ax2.set_ylabel("y (flat space)")
         sns.despine()
@@ -161,8 +163,8 @@ def plot_patterns(pattern_gids, all_gids, pos, patterns_dir):
 
 if __name__ == "__main__":
 
-    project_name = "cdf61143-0299-4a41-928d-b2cf0577d543"
-    t_start = 1500
+    project_name = "f867472e-ec93-4648-9d5d-7b075abffef7"
+    t_start = 2500
     plt_patterns = True
 
     sim_paths = utils.load_sim_path(project_name)
@@ -173,7 +175,7 @@ if __name__ == "__main__":
 
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
-        t_end = sim.t_end
+        t_end = 12500  # sim.t_end
         spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
         proj_rate_dict = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
