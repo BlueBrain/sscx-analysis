@@ -44,16 +44,17 @@ def create_syn_idx_df(edge_fname, local_syn_idx_mi, pklf_name):
     unique_gids, start_idx, counts = np.unique(report_gids, return_index=True, return_counts=True)
 
     global_syn_idx_dict = get_afferrent_global_syn_idx(edge_fname, unique_gids)
-    global_syn_idx = local2global_syn_idx(global_syn_idx_dict, unique_gids[0], local_syn_idx[0:counts[0]])
-    for gid, start_id, count in tzip(unique_gids[1:], start_idx[1:], counts[1:], miniters=len(unique_gids[1:])/1000):
-        global_syn_idx = np.concatenate((global_syn_idx, local2global_syn_idx(global_syn_idx_dict,
-                                                         gid, local_syn_idx[start_id:start_id+count])))
+    global_syn_idx = np.zeros_like(local_syn_idx, dtype=np.int64)
+    for gid, start_id, count in tzip(unique_gids, start_idx, counts, miniters=len(unique_gids)/100):
+        end_id = start_id + count
+        global_syn_idx[start_id:end_id] = local2global_syn_idx(global_syn_idx_dict, gid, local_syn_idx[start_id:end_id])
 
     sort_idx = np.argsort(global_syn_idx)
     global_syn_idx = global_syn_idx[sort_idx]
     pre_gids = _get_afferrent_gids(edge_fname, global_syn_idx)
     syn_df = pd.DataFrame({"pre_gid": pre_gids, "post_gid": report_gids[sort_idx],
                            "local_syn_idx": local_syn_idx[sort_idx]}, index=global_syn_idx)
+    syn_df.index.name = "global_syn_idx"  # stupid pandas...
     syn_df.to_pickle(pklf_name)
 
 
