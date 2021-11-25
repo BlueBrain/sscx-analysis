@@ -189,13 +189,11 @@ def main():
 
     if cfg["show_inputs"]:
         from conntility.circuit_models import neuron_groups
-        input_props = [neuron_groups.load_projection_locations(circ, proj)
-                       for proj in circ.config["projections"].keys()]
-        input_props = pandas.concat(input_props, axis=0)
+        input_props = neuron_groups.load_all_projection_locations(circ,
+        ["x", "y", "z", "u", "v", "w"] + neuron_groups.SS_COORDINATES)
         input_props = input_props.set_index(pandas.RangeIndex(len(input_props)))
-        input_props = neuron_groups.extra_properties.add_extra_properties(input_props, circ,
-                                                                          neuron_groups.SS_COORDINATES)
-        flat_locations = input_props.set_index("sgid")[neuron_groups.SS_COORDINATES]
+        flat_col_names = [neuron_groups.SS_COORDINATES[0], neuron_groups.SS_COORDINATES[2]]
+        flat_locations = input_props.set_index("sgid")[flat_col_names]
     else:
         spikes = data.map(read_spikes)
 
