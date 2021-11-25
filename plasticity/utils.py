@@ -24,13 +24,23 @@ def load_sim_path(project_name):
     return pd.read_pickle(pklf_name)
 
 
+def _idx2str(idx, level_name):
+    """Helper function to convert pandas.Index to string"""
+    value = ("%.2f" % idx).replace('.', 'p') if isinstance(idx, float) else "%s" % idx
+    return "%s%s" % (level_name, value)
+
+
 def midx2str(midx, level_names):
-    """Helper function to convert MultiIndex DataFrame index to string"""
-    str_ = ""
-    for i, level_name in enumerate(level_names):
-        value = ("%.2f" % midx[i]).replace('.', 'p') if isinstance(midx[i], float) else "%s" % midx[i]
-        str_ += "%s%s_" % (level_name, value)
-    return str_
+    """Helper function to convert pandas.MultiIndex to string"""
+    if len(level_names) == 1:  # it's not actually a MultiIndex
+        return _idx2str(midx, level_names[0]) + "_"
+    elif len(level_names) > 1:
+        str_ = ""
+        for i, level_name in enumerate(level_names):
+            str_ += _idx2str(midx[i], level_name) + "_"
+        return str_
+    else:
+        raise RuntimeError("Incorrect level_names passed")
 
 
 def get_spikes(sim, t_start, t_end):
