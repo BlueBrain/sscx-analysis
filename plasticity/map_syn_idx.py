@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Neurodamus reindexes global sonata synapse indices and reports local (starting from 0 for every gid) synapse IDs
 This script is taking such a report a creates a mapping (as pandas.DataFrame) between global and local synapse IDs
@@ -34,7 +35,7 @@ def local2global_syn_idx(syn_id_map, gid, local_syn_idx):
     return flat_global_syn_idx[local_syn_idx]
 
 
-def create_syn_idx_df(edge_fname, local_syn_idx_mi, pklf_name):
+def create_syn_idx_df(edge_fname, local_syn_idx_mi, pklf_name=None):
     """Creates pandas DataFrame with global [sonata_syn_id] synapse ID as index
     and local [gid][syn_id] synapse IDs as columns"""
     report_gids = local_syn_idx_mi.get_level_values(0).to_numpy()
@@ -55,7 +56,10 @@ def create_syn_idx_df(edge_fname, local_syn_idx_mi, pklf_name):
     syn_df = pd.DataFrame({"pre_gid": pre_gids, "post_gid": report_gids[sort_idx],
                            "local_syn_idx": local_syn_idx[sort_idx]}, index=global_syn_idx)
     syn_df.index.name = "global_syn_idx"  # stupid pandas...
-    syn_df.to_pickle(pklf_name)
+    if pklf_name is not None:
+        syn_df.to_pickle(pklf_name)
+    else:
+        return syn_df
 
 
 if __name__ == "__main__":
