@@ -1,6 +1,6 @@
 """
 Plastic SSCx related utility functions (most of them deal with the custom directory and file structure)
-author: András Ecker, last update: 11.2021
+author: András Ecker, last update: 12.2021
 """
 
 import os
@@ -8,6 +8,7 @@ import warnings
 import pickle
 import numpy as np
 import pandas as pd
+from libsonata import ElementReportReader
 
 
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
@@ -101,6 +102,25 @@ def load_patterns(project_name, seed=None):
     else:
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
+
+def load_synapse_report(h5f_name, t_start, t_end, t_step=None, gids=None, return_idx=False):
+    """Fast, pure libsonata, in line implementation of report.get()"""
+    report = ElementReportReader(h5f_name)
+    report = report[list(report.get_population_names())[0]]
+    assert t_start >= report.times[0] and t_end <= report.times[1], "Requested time range isn't reported"
+    t_stride = round(t_step/report.times[-1]) if t_step is not None else None
+    report_gids = np.asarray(report.get_node_ids()) + 1
+    node_idx = gids[np.isin(gids, report_gids, assume_unique=True)] - 1 if gids is not None else report_gids - 1
+    if gids is not None and len(node_idx) < len(gids):
+        warnings.warn("Not all gids are reported")
+    view = report.get(node_ids=node_idx.tolist(), tstart=t_start, tstop=t_end, tstride=t_stride)
+    if return_idx:
+        col_idx = pd.MultiIndex.from_tuples(view.ids, names=["post_gid", "local_syn_id"])
+        col_idx = col_idx.set_levels(col_idx.levels[0] + 1, level=0)  # get back gids from node_ids
+        return pd.DataFrame(data=view.data, index=pd.Index(view.times, name="time"),
+                            columns=col_idx)
+    else:
+        return view.times, view.data
 
 
 
