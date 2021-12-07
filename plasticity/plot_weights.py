@@ -60,8 +60,8 @@ def plot_gmax_change(gmax, fig_name):
     gs = gridspec.GridSpec(n_tbins, 1)
     for i in range(n_tbins):
         ax = fig.add_subplot(gs[i, 0])
-        pos_hist, bin_edges = np.histogram(gmax_change[gmax_change > 0], bins=30, range=[0, gmax_change_95p])
-        neg_hist, _ = np.histogram(gmax_change[gmax_change < 0], bins=30, range=[-1 * gmax_change_95p, 0])
+        pos_hist, bin_edges = utils.numba_hist(gmax_change[gmax_change > 0], 30, (0, gmax_change_95p))
+        neg_hist, _ = utils.numba_hist(gmax_change[gmax_change < 0], 30, (-1 * gmax_change_95p, 0))
         bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
         ax.bar(bin_centers, pos_hist, color=RED, edgecolor="black", lw=0.5)
         ax.bar(-1 * bin_centers[::-1], -1 * neg_hist, color=BLUE, edgecolor="black", lw=0.5)
@@ -79,6 +79,58 @@ def plot_gmax_change(gmax, fig_name):
     plt.close(fig)
 
 
+def plot_rho_2dhist(bins, t, data, fig_name):
+    """Plot 2d histogram of rho's time evolution"""
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    i = ax.imshow(data, cmap="inferno",  norm=matplotlib.colors.LogNorm(vmax=np.max(data)),
+                  aspect="auto", origin="lower")
+    plt.colorbar(i, label="#Synapses")
+    xtick_idx = np.linspace(0, len(t)-1, 5).astype(int)
+    ax.set_xticks(xtick_idx)
+    ax.set_xticklabels(t[xtick_idx]/1000.)
+    ax.set_xlabel("Time (s)")
+    ytick_idx = np.linspace(0, len(bins)-1, 5).astype(int)
+    ax.set_yticks(ytick_idx)
+    ax.set_yticklabels(bins[ytick_idx])
+    ax.set_ylabel("rho")
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
+def plot_rho_stack(bins, t, data, fig_name):
+    """Plots stacked time series of (binned) rho"""
+    t /= 1000.  # ms to second
+    cmap = plt.get_cmap("coolwarm", 10)
+    colors = [cmap(i) for i in range(10)]
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.stackplot(t, data, colors=colors)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=matplotlib.colors.BoundaryNorm(bins, cmap.N))
+    plt.colorbar(sm, ax=ax, ticks=bins, label="rho")
+    ax.set_xlim([t[0], t[-1]])
+    ax.set_xlabel("Time (s)")
+    ax.set_ylim([0, np.sum(data[:, 0])])
+    ax.set_ylabel("#Synapses")
+    fig.tight_layout()
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
+def get_binned_synapse_report(sim_path, report_name):
+    """Local wrapper of `utils.get_binned_synapse_report()` that saves and loads data"""
+    npzf_name = os.path.join(os.path.split(sim_path)[0], "binned_%s.npz" % report_name)
+    if not os.path.isfile(npzf_name):
+        h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+        bins, t, data = utils.get_binned_synapse_report(h5f_name)
+        data = utils.update_binned_data(report_name, data, bins)
+        np.savez(npzf_name, bins=bins, t=t, data=data)
+    else:
+        npzf = np.load(npzf_name)
+        bins, t, data = npzf["bins"], npzf["t"], npzf["data"]
+    return bins, t, data
+
+
 if __name__ == "__main__":
     project_name = "5b1420ca-dd31-4def-96d6-46fe99d20dcc"
 
@@ -87,12 +139,22 @@ if __name__ == "__main__":
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
     for idx, sim_path in sim_paths.iteritems():
-        report_name, t_start, t_end, t_step = "gmax_AMPA", 2000, 602000, 60000
+        report_name, t_step = "gmax_AMPA", 60000
         h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
-        _, data = utils.load_synapse_report(h5f_name, t_start, t_end, t_step)
+        _, data = utils.load_synapse_report(h5f_name, t_step)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA.png" % utils.midx2str(idx, level_names))
         plot_gmax_dist(data, fig_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sdelta_gmax_AMPA.png" % utils.midx2str(idx, level_names))
         plot_gmax_change(data, fig_name)
+
+        report_name = "rho"
+        bins, t, data = get_binned_synapse_report(sim_path, report_name)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
+        plot_rho_2dhist(bins, t, data, fig_name)
+        bins, data = utils.coarse_binning(bins, data, 10)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%srho_stack.png" % utils.midx2str(idx, level_names))
+        plot_rho_stack(bins, t, data, fig_name)
+
+
 
 

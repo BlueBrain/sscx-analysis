@@ -6,12 +6,15 @@ author: András Ecker, last update: 12.2021
 import os
 import warnings
 import pickle
+from tqdm.contrib import tzip
 import numpy as np
 import pandas as pd
+import numba
 from libsonata import ElementReportReader
 
 
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
+NONREP_SYNF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/nonrep_syn_df.pkl"
 
 
 def ensure_dir(dir_path):
@@ -103,12 +106,11 @@ def load_patterns(project_name, seed=None):
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
 
-def load_synapse_report(h5f_name, t_start, t_end, t_step=None, gids=None, return_idx=False):
+def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=None, return_idx=False):
     """Fast, pure libsonata, in line implementation of report.get()"""
     report = ElementReportReader(h5f_name)
     report = report[list(report.get_population_names())[0]]
-    assert t_start >= report.times[0] and t_end <= report.times[1], "Requested time range isn't reported"
-    t_stride = round(t_step/report.times[-1]) if t_step is not None else None
+    t_stride = round(t_step/report.times[2]) if t_step is not None else None
     report_gids = np.asarray(report.get_node_ids()) + 1
     node_idx = gids[np.isin(gids, report_gids, assume_unique=True)] - 1 if gids is not None else report_gids - 1
     if gids is not None and len(node_idx) < len(gids):
@@ -121,6 +123,54 @@ def load_synapse_report(h5f_name, t_start, t_end, t_step=None, gids=None, return
                             columns=col_idx)
     else:
         return view.times, view.data
+
+
+@numba.njit
+def numba_hist(values, bins, bin_range):
+    """Dummy function for numba decorator..."""
+    return np.histogram(values, bins=bins, range=bin_range)
+
+
+def get_binned_synapse_report(h5f_name, n_chunks=5, bins=200, bin_range=(0, 1)):
+    """Similar to `load_synapse_report()` above,
+    but is designed to load the full report and bin data (to be handled easier afterwards)"""
+    report = ElementReportReader(h5f_name)
+    report = report[list(report.get_population_names())[0]]
+    time = np.arange(*report.times)
+    n_bins = bins if isinstance(bins, int) else len(bins) - 1
+    binned_report = np.zeros((n_bins, len(time)), dtype=int)
+    node_idx = np.asarray(report.get_node_ids())
+    idx = np.linspace(0, len(node_idx), n_chunks+1, dtype=int)
+    for start_id, end_id in tzip(idx[:-1], idx[1:], desc="Loading chunks of data"):
+        view = report.get(node_ids=node_idx[start_id:end_id].tolist())
+        data = view.data
+        for i in range(len(time)):
+            hist, bin_edges = numba_hist(data[i, :], bins, bin_range)
+            binned_report[:, i] += hist
+        del data, view
+    return bin_edges, time, binned_report
+
+
+def update_binned_data(report_name, data, bin_edges):
+    """Updates binned report with constant, non-reported (but saved elsewhere for hex_O1) values"""
+    nonrep_syn_df = pd.read_pickle(NONREP_SYNF_NAME)
+    nonrep_data = nonrep_syn_df[report_name].to_numpy()
+    hist, _ = np.histogram(nonrep_data, bins=bin_edges)
+    for i in range(data.shape[1]):
+        data[:, i] += hist
+    return data
+
+
+def coarse_binning(bin_edges, data, new_nbins):
+    """Re-bins data from synapse report on a lower resolution (more coarse binning)"""
+    orig_nbins = data.shape[0]
+    q, m = np.divmod(orig_nbins, new_nbins)
+    assert m == 0, "Cannot devide original %i bins into %i new ones" % (orig_nbins, new_nbins)
+    new_data = np.zeros((int(orig_nbins / q), data.shape[1]), dtype=int)
+    idx = np.arange(0, orig_nbins + q, q)
+    for i, (start_id, end_id) in enumerate(zip(idx[:-1], idx[1:])):
+        new_data[i, :] = np.sum(data[start_id:end_id, :], axis=0)
+    return bin_edges[::q], new_data
 
 
 
