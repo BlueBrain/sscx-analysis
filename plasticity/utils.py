@@ -146,6 +146,31 @@ def load_nonrep_syn_df(report_name=None):
     return syn_df[report_name] if report_name is not None else syn_df
 
 
+def split_synapse_report(c, data, split_by):
+    """Splits `data` (synapse report in pd.DataFrame) into chunks, organized by `split_by` property of (post) gids"""
+    gids = data.columns.get_level_values(0).unique().to_numpy()
+    categories = c.cells.get(gids, split_by)
+    split_data = {}
+    unique_cats = np.sort(categories.unique())
+    for cat in unique_cats:
+        split_data[cat] = data[categories[categories == cat].index].to_numpy()
+    return split_data
+
+
+def update_split_data(c, report_name, split_data, split_by):
+    """Updates split data with constant, non-reported (but saved elsewhere for hex_O1) values"""
+    nonrep_df = load_nonrep_syn_df(["post_gid", report_name])
+    gids = nonrep_df["post_gid"].unique()
+    categories = c.cells.get(gids, split_by)
+    unique_cats = np.sort(categories.unique())
+    n = split_data[unique_cats[0]].shape[0]
+    for cat in unique_cats:
+        nonrep_data = nonrep_df.loc[nonrep_df["post_gid"].isin(categories[categories == cat].index),
+                                    report_name].to_numpy()
+        split_data[cat] = np.concatenate((split_data[cat], np.tile(nonrep_data, (n, 1))), axis=1)
+    return split_data
+
+
 @numba.njit
 def numba_hist(values, bins, bin_range):
     """Dummy function for numba decorator..."""
@@ -185,7 +210,7 @@ def coarse_binning(bin_edges, data, new_nbins):
     """Re-bins data from synapse report on a lower resolution (more coarse binning)"""
     orig_nbins = data.shape[0]
     q, m = np.divmod(orig_nbins, new_nbins)
-    assert m == 0, "Cannot devide original %i bins into %i new ones" % (orig_nbins, new_nbins)
+    assert m == 0, "Cannot divide original %i bins into %i new ones" % (orig_nbins, new_nbins)
     new_data = np.zeros((int(orig_nbins / q), data.shape[1]), dtype=int)
     idx = np.arange(0, orig_nbins + q, q)
     for i, (start_id, end_id) in enumerate(zip(idx[:-1], idx[1:])):
