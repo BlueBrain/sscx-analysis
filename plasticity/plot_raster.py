@@ -167,7 +167,7 @@ if __name__ == "__main__":
     t_start = 2500
     plt_patterns = True
 
-    sim_paths = utils.load_sim_path(project_name)
+    sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
     with open("raster_asth.pkl", "rb") as f:
