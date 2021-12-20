@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 from bluepy import Cell, Synapse, Circuit, Simulation
 import os
 import json
+from scipy.ndimage import gaussian_filter1d
 
 
-def get_single_cell_psths(blue_config, target_spec, psth_interval=None):
+def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20.0, t_smooth=None):
     """Extract single-cell spikes per pattern, re-aligned to stimulus onsets"""
 
     # Load simulation, circuit, and stim/opto configs
@@ -52,18 +53,57 @@ def get_single_cell_psths(blue_config, target_spec, psth_interval=None):
     # Extract single-cell PSTHs
     if psth_interval is None:
         psth_interval = [0, np.max(np.diff(time_windows))]
-    stim_spikes = [{gid: [] for gid in gids} for p in range(num_patterns * 2)] # Spikes per pattern and gid, re-aligned to stimulus onset
+    spike_trains = [{gid: [] for gid in gids} for p in range(num_patterns * 2)] # Spikes per pattern and gid, re-aligned to stimulus onset
     for sidx, pidx in enumerate(opto_stim_train):
         spk = spikes[np.logical_and(spikes.index - time_windows[sidx] >= psth_interval[0],
                                     spikes.index - time_windows[sidx] < psth_interval[-1])]
         spk.index = spk.index - time_windows[sidx] # Re-align to stimulus onset
         for gid in gids:
-            stim_spikes[pidx][gid].append(spk[spk.values == gid].index.to_list())
+            spike_trains[pidx][gid].append(spk[spk.values == gid].index.to_list())
 
-    # Single-cell spike rates
-    stim_rates = [[1e3 * np.mean([len(st) for st in stim_spikes[p][gid]]) / np.diff(psth_interval)[0] if len(stim_spikes[p][gid]) > 0 else 0 for gid in gids] for p in range(num_patterns * 2)]
+    # Single-cell average spike rates over trials and PSTH interval
+    avg_cell_rates = [[1e3 * np.mean([len(st) for st in spike_trains[p][gid]]) / np.diff(psth_interval)[0] if len(spike_trains[p][gid]) > 0 else 0 for gid in gids] for p in range(num_patterns * 2)]
 
-    return stim_spikes, stim_rates, stim_cfg, opto_cfg
+    # Instantaneous spike rates averaged over trials
+    rates = []
+    for p in range(num_patterns * 2):
+        pattern_rates = []
+        for gid in gids:
+            t_rate, rate = instant_firing_rate(spike_trains[p][gid], t_res, t_min=psth_interval[0], t_max=psth_interval[-1], t_smooth=t_smooth)
+            pattern_rates.append(rate)
+        rates.append(np.array(pattern_rates))
+
+    return t_rate, rates, spike_trains, avg_cell_rates, stim_cfg, opto_cfg
+
+
+def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
+    """ Estimation of instantaneous firing rates of given spike trains
+        over multiple trials (list of lists of spike times), optionally
+        using Gaussian smoothing
+    """
+    assert res_ms > 0.0, 'ERROR: Resolution must be larger than zero ms!'
+    num_trials = len(spikes)
+
+    if t_min is None:
+        t_min = np.min(spikes)
+    if t_max is None:
+        t_max = np.max(spikes)
+
+    bins = np.linspace(t_min, t_max, np.round((t_max - t_min) / res_ms).astype(int) + 1)
+    hist_count = np.zeros(len(bins) - 1)
+    for trial in range(num_trials):
+        hist_count += np.histogram(spikes[trial], bins=bins)[0]
+    if num_trials == 0:
+        rate = np.full_like(hist_count, np.nan)
+    else:
+        rate = hist_count / (num_trials * res_ms * 1e-3)
+    t = bins[:-1] + 0.5 * res_ms
+
+    if t_smooth is not None: # Allpy Gaussian smoothing
+        assert t_smooth > 0.0, 'ERROR: Smoothing time constant must be larger than zero ms!'
+        rate = gaussian_filter1d(rate, sigma=t_smooth / res_ms)
+
+    return t, rate
 
 
 def load_sim_results(sims):
