@@ -9,6 +9,27 @@ from bluepy import Cell, Synapse, Circuit, Simulation
 import os
 import json
 from scipy.ndimage import gaussian_filter1d
+from scipy.signal import find_peaks
+
+
+def detect_rate_peaks(t_rate, rates, peak_th=20.0, peak_width=20.0, peak_distance=200.0):
+    """
+    Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
+    using peak_th (Hz), peak_width (ms), peak_distance (ms)
+    """
+    t_res = np.median(np.diff(t_rate))
+    peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
+    peak_t = [t_rate[pidx] for pidx in peak_idx]
+    peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
+
+    t1 = [t[0] if len(t) > 0 else np.nan for t in peak_t] # First peak time
+    t2 = [t[1] if len(t) > 1 else np.nan for t in peak_t] # Second peak time
+    r1 = [r[0] if len(r) > 0 else np.nan for r in peak_rate] # First peak rate
+    r2 = [r[1] if len(r) > 1 else np.nan for r in peak_rate] # Second peak rate
+
+    peak_ratio = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
+
+    return peak_idx, t1, t2, r1, r2, peak_ratio
 
 
 def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20.0, t_smooth=None):
@@ -25,9 +46,12 @@ def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20
         stim_cfg = json.load(f)
 
     opto_file = os.path.join(os.path.split(blue_config)[0], 'opto_stim.json')
-    assert os.path.exists(opto_file), 'ERROR: Opto config file not found!'
-    with open(opto_file, 'r') as f:
-        opto_cfg = json.load(f)
+    if os.path.exists(opto_file):
+        with open(opto_file, 'r') as f:
+            opto_cfg = json.load(f)
+    else:
+        # print('INFO: No opto config found!')
+        opto_cfg = None
 
     # Select cells and spikes
     if isinstance(target_spec, dict):
@@ -46,8 +70,11 @@ def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20
     stim_train = stim_cfg['props']['stim_train']
     num_patterns = max(stim_train) + 1
     stim_int = [[t, t + stim_cfg['cfg']['duration_stim']] for t in np.array(time_windows[:-1])]
-    opto_int = [[opto_cfg['props']['opto_t'][i], opto_cfg['props']['opto_t'][i] + opto_cfg['props']['opto_dur'][i]] for i in range(len(opto_cfg['props']['opto_t']))]
-    stim_opto_overlap = np.array([np.max([(max(0, min(max(stim_int[i]), max(oint)) - max(min(stim_int[i]), min(oint)))) / np.diff(stim_int[i]) for oint in opto_int]) for i in range(len(stim_int))])
+    if opto_cfg is None:
+        stim_opto_overlap = np.zeros(len(stim_int))
+    else:
+        opto_int = [[opto_cfg['props']['opto_t'][i], opto_cfg['props']['opto_t'][i] + opto_cfg['props']['opto_dur'][i]] for i in range(len(opto_cfg['props']['opto_t']))]
+        stim_opto_overlap = np.array([np.max([(max(0, min(max(stim_int[i]), max(oint)) - max(min(stim_int[i]), min(oint)))) / np.diff(stim_int[i]) for oint in opto_int]) for i in range(len(stim_int))])
     opto_stim_train = (stim_opto_overlap > 0.0) * num_patterns + stim_train # Reindex stimuli (0..N-1: stims w/o opto, N..2N-1: stims with opto)
 
     # Extract single-cell PSTHs
@@ -62,7 +89,7 @@ def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20
             spike_trains[pidx][gid].append(spk[spk.values == gid].index.to_list())
 
     # Single-cell average spike rates over trials and PSTH interval
-    avg_cell_rates = [[1e3 * np.mean([len(st) for st in spike_trains[p][gid]]) / np.diff(psth_interval)[0] if len(spike_trains[p][gid]) > 0 else 0 for gid in gids] for p in range(num_patterns * 2)]
+    avg_cell_rates = [[1e3 * np.mean([len(st) for st in spike_trains[p][gid]]) / np.diff(psth_interval)[0] if len(spike_trains[p][gid]) > 0 else np.nan for gid in gids] for p in range(num_patterns * 2)]
 
     # Instantaneous spike rates averaged over trials
     rates = []
