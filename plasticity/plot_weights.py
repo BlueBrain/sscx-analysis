@@ -6,6 +6,7 @@ author: András Ecker, last update: 12.2021
 import os
 from copy import deepcopy
 import numpy as np
+import pandas as pd
 import utils
 from bluepy import Circuit
 import matplotlib
@@ -104,24 +105,39 @@ def plot_gmax_change_pie(gmax_diffs, fig_name):
 def plot_rho_hist(t, data, fig_name):
     """Plot histogram of rho (at fixed time t)"""
     t /= 1000.  # ms to second
-    categories = list(data.keys())
-    cmap = plt.get_cmap("tab20", len(categories))
-    colors = [cmap(i) for i in range(len(categories))]
-    plot_data = [data[cat].reshape(-1) for cat in categories]
-    fig = plt.figure(figsize=(10, 6.5))
-    ax = fig.add_subplot(1, 1, 1)
-    ns, bins, _ = ax.hist(plot_data, bins=30, range=(0, 1), stacked=True, color=colors, label=categories)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
-    ax.set_xlim([0, 1])
-    ax.set_xlabel("Rho at t = %s (s)" % t)
-    sns.despine(ax=ax, offset=True, trim=True)
-    ax2 = inset_axes(ax, width="80%", height="70%", loc=9)
-    # one should be able to reuse `ns` from the prev. hist, but idk. how...
-    ax2.hist(plot_data, bins=bins[1:-1], stacked=True, color=colors, label=categories)
-    ax2.set_xlim([bins[1], bins[-2]])
-    ax2.set_yticks([])
-    sns.despine(ax=ax2, left=True, offset=True, trim=True)
-    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    hue_order = np.sort(data["post_mtype"].unique())
+    cmap = plt.get_cmap("tab20", len(hue_order))
+    colors = [cmap(i) for i in range(len(hue_order))]
+    fig = plt.figure(figsize=(13, 6.5))
+    ax = fig.add_subplot(1, 4, 1)
+    sns.histplot(data=data[data["loc"] == "trunk"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax)
+    ax.set_title("trunk")
+    ax.set_ylim([0, 1])
+    ax.set_ylabel("Rho at t = %s (s)" % t)
+    ax2 = fig.add_subplot(1, 4, 2)
+    sns.histplot(data=data[data["loc"] == "oblique"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax2)
+    ax2.set_title("oblique")
+    ax2.set_ylim([0, 1])
+    ax2.set_ylabel("")
+    ax3 = fig.add_subplot(1, 4, 3)
+    sns.histplot(data=data[data["loc"] == "tuft"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax3)
+    ax3.set_title("tuft")
+    ax3.set_ylim([0, 1])
+    ax3.set_ylabel("")
+    ax4 = fig.add_subplot(1, 4, 4)
+    sns.histplot(data=data[data["loc"] == "basal"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, ax=ax4)
+    ax4.set_title("basal")
+    ax4.set_ylim([0, 1])
+    ax4.set_ylabel("")
+    plt.legend(handles=ax4.legend_.legendHandles, labels=[t.get_text() for t in ax4.legend_.texts],
+               title=ax4.legend_.get_title().get_text(), bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
+    sns.despine(offset=2, trim=True)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -202,15 +218,24 @@ def get_total_change_by(sim_path, report_name, split_by="layer", return_data=Fal
     return data, diffs if return_data else diffs
 
 
-def get_last_synapse_report_by(sim_path, report_name, split_by="mtype"):
-    """Loads last time step of report, splits it and updates it with non-saved data"""
-    c = Circuit(sim_path)
+def get_last_synapse_report(sim_path, report_name):
+    """Loads last time step of report, reindexes it, updates it with non-reported data,
+    and loads extra morph. features (for advanced grouping and plotting)"""
+    # load last time step reindex it, transpose it and rename column index
     h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
     last_data = utils.load_synapse_report(h5f_name, t_start=-1, return_idx=True)
     t = last_data.index.to_numpy()[0]
-    split_data = utils.split_synapse_report(c, last_data, split_by)
-    split_data = utils.update_split_data(c, report_name, split_data, split_by)
-    return t, split_data
+    last_data = utils.reindex_report(last_data)
+    last_data = last_data.transpose(copy=False)
+    last_data.columns = pd.Index([report_name])
+    # load non-reported values, convert them to float DF and merge the 2 datasets
+    nonrep_data = utils.load_nonrep_syn_df(report_name)
+    last_data = last_data.append(nonrep_data.to_frame().astype(np.float64))
+    last_data.sort_index(inplace=True)
+    # load extra morph. features and add the above data as extra column
+    df = utils.load_extra_morph_features(["post_gid", "post_mtype", "loc"])
+    df[report_name] = last_data.to_numpy()
+    return t, df
 
 
 def main(project_name):
@@ -239,9 +264,9 @@ def main(project_name):
         transition_matrix, _ = get_transition_matrix(middle_data, bins)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_transition.png" % utils.midx2str(idx, level_names))
         plot_transition_matrix(deepcopy(transition_matrix), bins, fig_name)
-        last_t, last_data = get_last_synapse_report_by(sim_path, report_name)
+        last_t, last_df = get_last_synapse_report(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
-        plot_rho_hist(last_t, last_data, fig_name)
+        plot_rho_hist(last_t, last_df, fig_name)
 
 
 if __name__ == "__main__":

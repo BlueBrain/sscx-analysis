@@ -1,6 +1,6 @@
 """
 Plastic SSCx related utility functions (most of them deal with the custom directory and file structure)
-author: András Ecker, last update: 12.2021
+author: András Ecker, last update: 01.2022
 """
 
 import os
@@ -10,11 +10,14 @@ from tqdm.contrib import tzip
 import numpy as np
 import pandas as pd
 import numba
+import multiprocessing as mp
 from libsonata import ElementReportReader
 
 
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
+MAPPING_SYNF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/syn_idx.pkl"
 NONREP_SYNF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/nonrep_syn_df.pkl"
+MORPH_FF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/morph_features.pkl"
 
 
 def ensure_dir(dir_path):
@@ -122,8 +125,12 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
     """Fast, pure libsonata, in line implementation of report.get()"""
     report = ElementReportReader(h5f_name)
     report = report[list(report.get_population_names())[0]]
-    if t_start == -1:  # special case of loading only the last time step
-        time = np.arange(*report.times)
+    time = np.arange(*report.times)
+    if t_start == -1 and t_end == 0:
+        raise NotImplementedError("Loading only the first and last time steps is not implemented yet")
+    if t_end == 0 and t_start != -1:  # special case of loading only the first time step
+        t_start = t_end = time[0]
+    if t_start == -1 and t_end != 0:  # special case of loading only the last time step
         t_start = t_end = time[-1]
     t_stride = round(t_step/report.times[2]) if t_step is not None else None
     report_gids = np.asarray(report.get_node_ids()) + 1
@@ -132,7 +139,10 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
         warnings.warn("Not all gids are reported")
     view = report.get(node_ids=node_idx.tolist(), tstart=t_start, tstop=t_end, tstride=t_stride)
     if return_idx:
-        col_idx = pd.MultiIndex.from_tuples(view.ids, names=["post_gid", "local_syn_id"])
+        # col_idx = view.ids
+        # col_idx[:, 0] += 1  # get back gids from node_ids (in libsonata==0.1.10 .ids returns an array)
+        # col_idx = pd.MultiIndex.from_arrays(view.ids, names=["post_gid", "local_syn_idx"])
+        col_idx = pd.MultiIndex.from_tuples(view.ids, names=["post_gid", "local_syn_idx"])
         col_idx = col_idx.set_levels(col_idx.levels[0] + 1, level=0)  # get back gids from node_ids
         return pd.DataFrame(data=view.data, index=pd.Index(view.times, name="time"),
                             columns=col_idx)
@@ -140,14 +150,31 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
         return view.times, view.data
 
 
+def reindex_report(data):
+    """Re-indexes synapse report from (Neurodamus style) post_gid & local_syn_idx MultiIndex
+    to (bluepy style) single global_syn_idx"""
+    # load mapping df, which has (and is ordered by) the global_syn_idx
+    syn_df = pd.read_pickle(MAPPING_SYNF_NAME)
+    # sort report columns to have the same ordering as the mapping df
+    data.sort_index(axis=1, inplace=True)
+    data.columns = syn_df.index
+    return data
+
+
 def load_nonrep_syn_df(report_name=None):
-    """Loads bluepy style synapse dataframe of non-reported (EXC) synapses (on L6 PCs in hex_O1)"""
+    """Loads bluepy style synapse DataFrame of non-reported (EXC) synapses (on L6 PCs in hex_O1)"""
     syn_df = pd.read_pickle(NONREP_SYNF_NAME)
     return syn_df[report_name] if report_name is not None else syn_df
 
 
+def load_extra_morph_features(features=None):
+    """Loads bluepy style synapse DataFrame of non-reported (EXC) synapses (on L6 PCs in hex_O1)"""
+    df = pd.read_pickle(MORPH_FF_NAME)
+    return df[features] if features is not None else df
+
+
 def split_synapse_report(c, data, split_by):
-    """Splits `data` (synapse report in pd.DataFrame) into chunks, organized by `split_by` property of (post) gids"""
+    """Splits `data` (synapse report in DataFrame) into chunks, organized by `split_by` property of (post) gids"""
     gids = data.columns.get_level_values(0).unique().to_numpy()
     categories = c.cells.get(gids, split_by)
     split_data = {}
