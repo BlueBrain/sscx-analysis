@@ -6,7 +6,6 @@ author: András Ecker, last update: 12.2021
 import os
 from copy import deepcopy
 import numpy as np
-import pandas as pd
 import utils
 from bluepy import Circuit
 import matplotlib
@@ -162,9 +161,28 @@ def plot_rho_stack(bins, t, data, fig_name):
     plt.close(fig)
 
 
+def plot_mean_rho_matrix(rho_matrix, mtypes, fig_name):
+    """Plots transition matrix (on log scale)"""
+    cmap = plt.get_cmap("coolwarm").copy()
+    cmap.set_bad("white")
+    fig = plt.figure(figsize=(10, 9))
+    ax = fig.add_subplot(1, 1, 1)
+    i = ax.imshow(rho_matrix, cmap=cmap, aspect="auto", vmin=0.15, vmax=0.85)
+    plt.colorbar(i, label="Mean rho")
+    ticks = np.arange(len(mtypes))
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(mtypes, rotation=45)
+    ax.set_xlabel("To (mtype)")
+    ax.set_yticks(ticks)
+    ax.set_yticklabels(mtypes)
+    ax.set_ylabel("From (mtype)")
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 def plot_transition_matrix(transition_matrix, bins, fig_name):
     """Plots transition matrix (on log scale)"""
-    cmap = plt.get_cmap("inferno").copy()
+    cmap = plt.get_cmap("viridis").copy()
     cmap.set_bad(cmap(0.0))
     fig = plt.figure(figsize=(10, 9))
     ax = fig.add_subplot(1, 1, 1)
@@ -182,6 +200,44 @@ def plot_transition_matrix(transition_matrix, bins, fig_name):
     ax.set_ylabel("From (rho)")
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
+
+
+def get_total_change_by(sim_path, report_name, split_by="layer", return_data=False):
+    """Loads full report, splits it and gets total change (last-first time step)"""
+    c = Circuit(sim_path)
+    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+    data = utils.load_synapse_report(h5f_name, return_idx=True)
+    split_data = utils.split_synapse_report(c, data, split_by)
+    split_data = utils.update_split_data(c, report_name, split_data, split_by)
+    diffs = {key: val[-1]-val[0] for key, val in split_data.items()}
+    return data, diffs if return_data else diffs
+
+
+def get_all_synapses_tend(sim_path, report_name):
+    """Loads last time step of report, reindexes it, updates it with non-reported data,
+    and loads extra morph. features (for advanced grouping and plotting)"""
+    t, data = utils.get_all_synapses_at_t(sim_path, report_name, t=-1)
+    # load extra morph. features and add the above data as extra column
+    df = utils.load_extra_morph_features(["post_mtype", "loc"])
+    df[report_name] = data.to_numpy()
+    return t, df
+
+
+def get_mean_rho_matrix_tstart(sim_path):
+    """Loads in first time step of report (probably faster then bleupy based queries), reindexes it,
+    updates it with non-reported data, and groups in a pathway (pre_mtype-post_mtype) specific manner"""
+    _, data = utils.get_all_synapses_at_t(sim_path, report_name="rho", t=0)
+    # load pre and post mtypes and add the above data as extra column
+    df = utils.load_extra_morph_features(["pre_mtype", "post_mtype"])
+    mtypes = np.sort(df["post_mtype"].unique())
+    df[report_name] = data.to_numpy()
+    mean_rhos = sum_rhos = np.zeros((len(mtypes), len(mtypes)))
+    for i, mtype in enumerate(mtypes):
+        df_mtype = df.loc[df["pre_mtype"] == mtype]
+        mean_rhos[i, :] = df_mtype.groupby("post_mtype").mean().to_numpy().reshape(-1)
+        sum_rhos[i, :] = df_mtype.groupby("post_mtype").sum().to_numpy().reshape(-1)
+    mean_rhos[sum_rhos < 5000] = np.nan  # the threshold of 5000 synapses is pretty arbitrary
+    return mtypes, mean_rhos
 
 
 def get_transition_matrix(data, bins):
@@ -205,37 +261,6 @@ def get_transition_matrix(data, bins):
         transition_matrix[i, i] = diag
     bin_edges[-1] -= 1e-5
     return transition_matrix, bin_edges
-
-
-def get_total_change_by(sim_path, report_name, split_by="layer", return_data=False):
-    """Loads full report, splits it and gets total change (last-first time step)"""
-    c = Circuit(sim_path)
-    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
-    data = utils.load_synapse_report(h5f_name, return_idx=True)
-    split_data = utils.split_synapse_report(c, data, split_by)
-    split_data = utils.update_split_data(c, report_name, split_data, split_by)
-    diffs = {key: val[-1]-val[0] for key, val in split_data.items()}
-    return data, diffs if return_data else diffs
-
-
-def get_last_synapse_report(sim_path, report_name):
-    """Loads last time step of report, reindexes it, updates it with non-reported data,
-    and loads extra morph. features (for advanced grouping and plotting)"""
-    # load last time step reindex it, transpose it and rename column index
-    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
-    last_data = utils.load_synapse_report(h5f_name, t_start=-1, return_idx=True)
-    t = last_data.index.to_numpy()[0]
-    last_data = utils.reindex_report(last_data)
-    last_data = last_data.transpose(copy=False)
-    last_data.columns = pd.Index([report_name])
-    # load non-reported values, convert them to float DF and merge the 2 datasets
-    nonrep_data = utils.load_nonrep_syn_df(report_name)
-    last_data = last_data.append(nonrep_data.to_frame().astype(np.float64))
-    last_data.sort_index(inplace=True)
-    # load extra morph. features and add the above data as extra column
-    df = utils.load_extra_morph_features(["post_gid", "post_mtype", "loc"])
-    df[report_name] = last_data.to_numpy()
-    return t, df
 
 
 def main(project_name):
@@ -264,7 +289,7 @@ def main(project_name):
         transition_matrix, _ = get_transition_matrix(middle_data, bins)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_transition.png" % utils.midx2str(idx, level_names))
         plot_transition_matrix(deepcopy(transition_matrix), bins, fig_name)
-        last_t, last_df = get_last_synapse_report(sim_path, report_name)
+        last_t, last_df = get_all_synapses_tend(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
         plot_rho_hist(last_t, last_df, fig_name)
 
