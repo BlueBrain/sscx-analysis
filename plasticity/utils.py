@@ -139,11 +139,9 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
         warnings.warn("Not all gids are reported")
     view = report.get(node_ids=node_idx.tolist(), tstart=t_start, tstop=t_end, tstride=t_stride)
     if return_idx:
-        # col_idx = view.ids
-        # col_idx[:, 0] += 1  # get back gids from node_ids (in libsonata==0.1.10 .ids returns an array)
-        # col_idx = pd.MultiIndex.from_arrays(view.ids, names=["post_gid", "local_syn_idx"])
-        col_idx = pd.MultiIndex.from_tuples(view.ids, names=["post_gid", "local_syn_idx"])
-        col_idx = col_idx.set_levels(col_idx.levels[0] + 1, level=0)  # get back gids from node_ids
+        col_idx = view.ids
+        col_idx[:, 0] += 1  # get back gids from node_ids
+        col_idx = pd.MultiIndex.from_arrays(col_idx.transpose(), names=["post_gid", "local_syn_idx"])
         return pd.DataFrame(data=view.data, index=pd.Index(view.times, name="time"),
                             columns=col_idx)
     else:
@@ -171,6 +169,28 @@ def load_extra_morph_features(features=None):
     """Loads bluepy style synapse DataFrame of non-reported (EXC) synapses (on L6 PCs in hex_O1)"""
     df = pd.read_pickle(MORPH_FF_NAME)
     return df[features] if features is not None else df
+
+
+def get_all_synapses_at_t(sim_path, report_name, t):
+    """Loads reported and non-reported synapses (ordered by global_syn_id) at given time t"""
+    # load time step
+    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+    if t == 0:
+        data = load_synapse_report(h5f_name, t_end=0, return_idx=True)
+    elif t == -1:
+        data = load_synapse_report(h5f_name, t_start=-1, return_idx=True)
+    else:
+        data = load_synapse_report(h5f_name, t_start=t, t_end=t, return_idx=True)
+    report_t = data.index.to_numpy()[0]
+    # reindex it, transpose it and rename column index
+    data = reindex_report(data)
+    data = data.transpose(copy=False)
+    data.columns = pd.Index([report_name])
+    # load non-reported values, convert them to float DF and merge the 2 datasets
+    nonrep_data = load_nonrep_syn_df(report_name)
+    data = data.append(nonrep_data.to_frame().astype(np.float64))
+    data.sort_index(inplace=True)
+    return report_t, data
 
 
 def split_synapse_report(c, data, split_by):
