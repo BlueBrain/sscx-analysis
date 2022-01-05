@@ -1,6 +1,6 @@
 """
 Plot evolution of synaptic weights (in plasticity simulations) over time
-author: András Ecker, last update: 12.2021
+author: András Ecker, last update: 01.2022
 """
 
 import os
@@ -161,14 +161,15 @@ def plot_rho_stack(bins, t, data, fig_name):
     plt.close(fig)
 
 
-def plot_mean_rho_matrix(rho_matrix, mtypes, fig_name):
+def plot_mean_rho_matrix(t, mtypes, rho_matrix, fig_name):
     """Plots transition matrix (on log scale)"""
+    t /= 1000.  # ms to second
     cmap = plt.get_cmap("coolwarm").copy()
     cmap.set_bad("white")
     fig = plt.figure(figsize=(10, 9))
     ax = fig.add_subplot(1, 1, 1)
     i = ax.imshow(rho_matrix, cmap=cmap, aspect="auto", vmin=0.15, vmax=0.85)
-    plt.colorbar(i, label="Mean rho")
+    plt.colorbar(i, label="Mean rho at t = %s (s)" % t)
     ticks = np.arange(len(mtypes))
     ax.set_xticks(ticks)
     ax.set_xticklabels(mtypes, rotation=45)
@@ -218,24 +219,19 @@ def get_all_synapses_tend(sim_path, report_name):
     and loads extra morph. features (for advanced grouping and plotting)"""
     t, data = utils.get_all_synapses_at_t(sim_path, report_name, t=-1)
     # load extra morph. features and add the above data as extra column
-    df = utils.load_extra_morph_features(["post_mtype", "loc"])
+    df = utils.load_extra_morph_features(["pre_mtype", "post_mtype", "loc"])
     df[report_name] = data.to_numpy()
     return t, df
 
 
-def get_mean_rho_matrix_tstart(sim_path):
-    """Loads in first time step of report (probably faster then bleupy based queries), reindexes it,
-    updates it with non-reported data, and groups in a pathway (pre_mtype-post_mtype) specific manner"""
-    _, data = utils.get_all_synapses_at_t(sim_path, report_name="rho", t=0)
-    # load pre and post mtypes and add the above data as extra column
-    df = utils.load_extra_morph_features(["pre_mtype", "post_mtype"])
+def get_mean_rho_matrix(df):
+    """Gets pathway specific mean rho matrix based on the output of `get_all_synapses_tend()` above"""
     mtypes = np.sort(df["post_mtype"].unique())
-    df[report_name] = data.to_numpy()
-    mean_rhos = sum_rhos = np.zeros((len(mtypes), len(mtypes)))
+    mean_rhos, sum_rhos = np.zeros((len(mtypes), len(mtypes))), np.zeros((len(mtypes), len(mtypes)))
     for i, mtype in enumerate(mtypes):
         df_mtype = df.loc[df["pre_mtype"] == mtype]
-        mean_rhos[i, :] = df_mtype.groupby("post_mtype").mean().to_numpy().reshape(-1)
-        sum_rhos[i, :] = df_mtype.groupby("post_mtype").sum().to_numpy().reshape(-1)
+        mean_rhos[i, :] = df_mtype.groupby("post_mtype").mean("rho").to_numpy().reshape(-1)
+        sum_rhos[i, :] = df_mtype.groupby("post_mtype").sum("rho").to_numpy().reshape(-1)
     mean_rhos[sum_rhos < 5000] = np.nan  # the threshold of 5000 synapses is pretty arbitrary
     return mtypes, mean_rhos
 
@@ -269,6 +265,7 @@ def main(project_name):
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
     for idx, sim_path in sim_paths.iteritems():
+        '''
         report_name = "gmax_AMPA"
         data, diffs = get_total_change_by(sim_path, report_name, return_data=True)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_pies.png" % utils.midx2str(idx, level_names))
@@ -277,7 +274,7 @@ def main(project_name):
         plot_gmax_change_hist(data.to_numpy(), fig_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_hists.png" % utils.midx2str(idx, level_names))
         plot_gmax_dists(data.to_numpy(), fig_name)
-
+        
         report_name = "rho"
         h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
         bins, t, hist_data = utils.get_synapse_report_hist(h5f_name)
@@ -291,9 +288,28 @@ def main(project_name):
         plot_transition_matrix(deepcopy(transition_matrix), bins, fig_name)
         last_t, last_df = get_all_synapses_tend(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
-        plot_rho_hist(last_t, last_df, fig_name)
+        plot_rho_hist(deepcopy(last_t), last_df, fig_name)
+        '''
+        report_name = "rho"
+        h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+        last_t, last_df = get_all_synapses_tend(sim_path, report_name)
+        mtypes, last_rho_matrix = get_mean_rho_matrix(last_df)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%srho_matrix.png" % utils.midx2str(idx, level_names))
+        plot_mean_rho_matrix(deepcopy(last_t), mtypes, last_rho_matrix, fig_name)
 
 
 if __name__ == "__main__":
     project_name = "LayerWiseEShotNoise_PyramidPatterns"  # "5b1420ca-dd31-4def-96d6-46fe99d20dcc"
     main(project_name)
+
+
+'''
+import utils
+import os
+project_name = "LayerWiseEShotNoise_PyramidPatterns"
+sim_paths = utils.load_sim_paths(project_name)
+sim_path = sim_paths.iloc[0]
+report_name = "rho"
+h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+%time data = utils.load_synapse_report(h5f_name, t_start=-1, return_idx=True)
+'''
