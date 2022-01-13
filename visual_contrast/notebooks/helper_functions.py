@@ -12,15 +12,28 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 
 
-def detect_rate_peaks(t_rate, rates, peak_th=20.0, peak_width=20.0, peak_distance=200.0):
+def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance=200.0, t_range=None):
     """
     Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
-    using peak_th (Hz), peak_width (ms), peak_distance (ms)
+    using peak_th (Hz), peak_width (ms), peak_distance (ms), within given time
+    range and selecting the two highest peaks
     """
     t_res = np.median(np.diff(t_rate))
     peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
-    peak_t = [t_rate[pidx] for pidx in peak_idx]
+
+    # Remove out-of-range peaks
+    if t_range is not None:
+        for idx, pidx in enumerate(peak_idx):
+            peak_idx[idx] = pidx[np.logical_and(t_rate[pidx] >= t_range[0], t_rate[pidx] < t_range[1])]
+
+    # In case of more than two (remaining) peaks: keep only two highest
+    for idx, pidx in enumerate(peak_idx):
+        r = rates[idx][pidx]
+        sel = np.argsort(r)[:-3:-1] # Find two highest
+        peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
+
     peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
+    peak_t = [t_rate[pidx] for pidx in peak_idx]
 
     t1 = [t[0] if len(t) > 0 else np.nan for t in peak_t] # First peak time
     t2 = [t[1] if len(t) > 1 else np.nan for t in peak_t] # Second peak time
@@ -32,105 +45,141 @@ def detect_rate_peaks(t_rate, rates, peak_th=20.0, peak_width=20.0, peak_distanc
     return peak_idx, t1, t2, r1, r2, peak_ratio
 
 
-def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20.0, t_smooth=None):
-    """Extract single-cell spikes per pattern, re-aligned to stimulus onsets"""
+### ALTERNATIVE IMPLEMENTATION ###
+# def detect_rate_peaks(t_rate, rates, peak_th=None):
+#     """
+#     Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
+#     separated by population rate minima, above specified peak_th (Hz)
+#     """
+#     # Find population rate minima, to separate first from second peak interval
+#     min_idx = find_peaks(-np.mean(rates, 0))[0][:2]
+#     assert len(min_idx) == 2, 'ERROR: Population minima could not be determined!'
 
-    # Load simulation, circuit, and stim/opto configs
-    sim = Simulation(blue_config)
-    c = sim.circuit
+#     # Find first and second peak between population minima
+#     peak_idx = []
+#     for r in rates:
+#         pidx1 = np.argmax(r[:min_idx[0]])
+#         if peak_th is not None and r[pidx1] <= peak_th:
+#             pidx1 = -1
+#         pidx2 = min_idx[0] + np.argmax(r[min_idx[0]:min_idx[1]])
+#         if peak_th is not None and r[pidx2] <= peak_th:
+#             pidx2 = -1
+#         peak_idx.append(np.array([pidx1, pidx2]))
 
-    stim_file = os.path.abspath(os.path.join(os.path.split(blue_config)[0], sim.config['Stimulus_spikeReplay']['SpikeFile']))
-    stim_file = os.path.splitext(stim_file)[0] + '.json'
-    assert os.path.exists(stim_file), 'ERROR: Stim config file not found!'
-    with open(stim_file, 'r') as f:
-        stim_cfg = json.load(f)
+#     peak_rate = [np.array([rates[idx][p] if p >= 0 else np.nan for p in pidx]) for idx, pidx in enumerate(peak_idx)]
+#     peak_t = [np.array([t_rate[p] if p >= 0 else np.nan for p in pidx]) for pidx in peak_idx]
 
-    opto_file = os.path.join(os.path.split(blue_config)[0], 'opto_stim.json')
-    if os.path.exists(opto_file):
-        with open(opto_file, 'r') as f:
-            opto_cfg = json.load(f)
-    else:
-        # print('INFO: No opto config found!')
-        opto_cfg = None
+#     t1 = [t[0] for t in peak_t] # First peak time
+#     t2 = [t[1] for t in peak_t] # Second peak time
+#     r1 = [r[0] for r in peak_rate] # First peak rate
+#     r2 = [r[1] for r in peak_rate] # Second peak rate
 
-    # Select cells and spikes
-    if isinstance(target_spec, dict):
-        target_spec = target_spec.copy()
-        cell_target = target_spec.pop('target', None)
-        gids = c.cells.ids(target_spec)
-        if cell_target is not None:
-            gids = np.intersect1d(gids, c.cells.ids(cell_target))
-    else:
-        gids = c.cells.ids(target_spec)
+#     peak_ratio = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
 
-    spikes = sim.spikes.get(gids)
-
-    # Find overlapping opto stimuli
-    time_windows = stim_cfg['props']['time_windows']
-    stim_train = stim_cfg['props']['stim_train']
-    num_patterns = max(stim_train) + 1
-    stim_int = [[t, t + stim_cfg['cfg']['duration_stim']] for t in np.array(time_windows[:-1])]
-    if opto_cfg is None:
-        stim_opto_overlap = np.zeros(len(stim_int))
-    else:
-        opto_int = [[opto_cfg['props']['opto_t'][i], opto_cfg['props']['opto_t'][i] + opto_cfg['props']['opto_dur'][i]] for i in range(len(opto_cfg['props']['opto_t']))]
-        stim_opto_overlap = np.array([np.max([(max(0, min(max(stim_int[i]), max(oint)) - max(min(stim_int[i]), min(oint)))) / np.diff(stim_int[i]) for oint in opto_int]) for i in range(len(stim_int))])
-    opto_stim_train = (stim_opto_overlap > 0.0) * num_patterns + stim_train # Reindex stimuli (0..N-1: stims w/o opto, N..2N-1: stims with opto)
-
-    # Extract single-cell PSTHs
-    if psth_interval is None:
-        psth_interval = [0, np.max(np.diff(time_windows))]
-    spike_trains = [{gid: [] for gid in gids} for p in range(num_patterns * 2)] # Spikes per pattern and gid, re-aligned to stimulus onset
-    for sidx, pidx in enumerate(opto_stim_train):
-        spk = spikes[np.logical_and(spikes.index - time_windows[sidx] >= psth_interval[0],
-                                    spikes.index - time_windows[sidx] < psth_interval[-1])]
-        spk.index = spk.index - time_windows[sidx] # Re-align to stimulus onset
-        for gid in gids:
-            spike_trains[pidx][gid].append(spk[spk.values == gid].index.to_list())
-
-    # Single-cell average spike rates over trials and PSTH interval
-    avg_cell_rates = [[1e3 * np.mean([len(st) for st in spike_trains[p][gid]]) / np.diff(psth_interval)[0] if len(spike_trains[p][gid]) > 0 else np.nan for gid in gids] for p in range(num_patterns * 2)]
-
-    # Instantaneous spike rates averaged over trials
-    rates = []
-    for p in range(num_patterns * 2):
-        pattern_rates = []
-        for gid in gids:
-            t_rate, rate = instant_firing_rate(spike_trains[p][gid], t_res, t_min=psth_interval[0], t_max=psth_interval[-1], t_smooth=t_smooth)
-            pattern_rates.append(rate)
-        rates.append(np.array(pattern_rates))
-
-    return t_rate, rates, spike_trains, avg_cell_rates, stim_cfg, opto_cfg
+#     return peak_idx, t1, t2, r1, r2, peak_ratio
 
 
-def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
-    """ Estimation of instantaneous firing rates of given spike trains
-        over multiple trials (list of lists of spike times), optionally
-        using Gaussian smoothing
-    """
-    assert res_ms > 0.0, 'ERROR: Resolution must be larger than zero ms!'
-    num_trials = len(spikes)
+### MOVED TO single_cell_psths.py ###
+# def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20.0, t_smooth=None):
+#     """Extract single-cell spikes per pattern, re-aligned to stimulus onsets"""
 
-    if t_min is None:
-        t_min = np.min(spikes)
-    if t_max is None:
-        t_max = np.max(spikes)
+#     # Load simulation, circuit, and stim/opto configs
+#     sim = Simulation(blue_config)
+#     c = sim.circuit
 
-    bins = np.linspace(t_min, t_max, np.round((t_max - t_min) / res_ms).astype(int) + 1)
-    hist_count = np.zeros(len(bins) - 1)
-    for trial in range(num_trials):
-        hist_count += np.histogram(spikes[trial], bins=bins)[0]
-    if num_trials == 0:
-        rate = np.full_like(hist_count, np.nan)
-    else:
-        rate = hist_count / (num_trials * res_ms * 1e-3)
-    t = bins[:-1] + 0.5 * res_ms
+#     stim_file = os.path.abspath(os.path.join(os.path.split(blue_config)[0], sim.config['Stimulus_spikeReplay']['SpikeFile']))
+#     stim_file = os.path.splitext(stim_file)[0] + '.json'
+#     assert os.path.exists(stim_file), 'ERROR: Stim config file not found!'
+#     with open(stim_file, 'r') as f:
+#         stim_cfg = json.load(f)
 
-    if t_smooth is not None: # Allpy Gaussian smoothing
-        assert t_smooth > 0.0, 'ERROR: Smoothing time constant must be larger than zero ms!'
-        rate = gaussian_filter1d(rate, sigma=t_smooth / res_ms)
+#     opto_file = os.path.join(os.path.split(blue_config)[0], 'opto_stim.json')
+#     if os.path.exists(opto_file):
+#         with open(opto_file, 'r') as f:
+#             opto_cfg = json.load(f)
+#     else:
+#         # print('INFO: No opto config found!')
+#         opto_cfg = None
 
-    return t, rate
+#     # Select cells and spikes
+#     if isinstance(target_spec, dict):
+#         target_spec = target_spec.copy()
+#         cell_target = target_spec.pop('target', None)
+#         gids = c.cells.ids(target_spec)
+#         if cell_target is not None:
+#             gids = np.intersect1d(gids, c.cells.ids(cell_target))
+#     else:
+#         gids = c.cells.ids(target_spec)
+
+#     spikes = sim.spikes.get(gids)
+
+#     # Find overlapping opto stimuli
+#     time_windows = stim_cfg['props']['time_windows']
+#     stim_train = stim_cfg['props']['stim_train']
+#     num_patterns = max(stim_train) + 1
+#     stim_int = [[t, t + stim_cfg['cfg']['duration_stim']] for t in np.array(time_windows[:-1])]
+#     if opto_cfg is None:
+#         stim_opto_overlap = np.zeros(len(stim_int))
+#     else:
+#         opto_int = [[opto_cfg['props']['opto_t'][i], opto_cfg['props']['opto_t'][i] + opto_cfg['props']['opto_dur'][i]] for i in range(len(opto_cfg['props']['opto_t']))]
+#         stim_opto_overlap = np.array([np.max([(max(0, min(max(stim_int[i]), max(oint)) - max(min(stim_int[i]), min(oint)))) / np.diff(stim_int[i]) for oint in opto_int]) for i in range(len(stim_int))])
+#     opto_stim_train = (stim_opto_overlap > 0.0) * num_patterns + stim_train # Reindex stimuli (0..N-1: stims w/o opto, N..2N-1: stims with opto)
+
+#     # Extract single-cell PSTHs
+#     if psth_interval is None:
+#         psth_interval = [0, np.max(np.diff(time_windows))]
+#     spike_trains = [{gid: [] for gid in gids} for p in range(num_patterns * 2)] # Spikes per pattern and gid, re-aligned to stimulus onset
+#     for sidx, pidx in enumerate(opto_stim_train):
+#         spk = spikes[np.logical_and(spikes.index - time_windows[sidx] >= psth_interval[0],
+#                                     spikes.index - time_windows[sidx] < psth_interval[-1])]
+#         spk.index = spk.index - time_windows[sidx] # Re-align to stimulus onset
+#         for gid in gids:
+#             spike_trains[pidx][gid].append(spk[spk.values == gid].index.to_list())
+
+#     # Single-cell average spike rates over trials and PSTH interval
+#     avg_cell_rates = [[1e3 * np.mean([len(st) for st in spike_trains[p][gid]]) / np.diff(psth_interval)[0] if len(spike_trains[p][gid]) > 0 else np.nan for gid in gids] for p in range(num_patterns * 2)]
+
+#     # Instantaneous spike rates averaged over trials
+#     rates = []
+#     for p in range(num_patterns * 2):
+#         pattern_rates = []
+#         for gid in gids:
+#             t_rate, rate = instant_firing_rate(spike_trains[p][gid], t_res, t_min=psth_interval[0], t_max=psth_interval[-1], t_smooth=t_smooth)
+#             pattern_rates.append(rate)
+#         rates.append(np.array(pattern_rates))
+
+#     return t_rate, rates, spike_trains, avg_cell_rates, gids, stim_cfg, opto_cfg
+
+
+### MOVED TO single_cell_psths.py ###
+# def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
+#     """ Estimation of instantaneous firing rates of given spike trains
+#         over multiple trials (list of lists of spike times), optionally
+#         using Gaussian smoothing
+#     """
+#     assert res_ms > 0.0, 'ERROR: Resolution must be larger than zero ms!'
+#     num_trials = len(spikes)
+
+#     if t_min is None:
+#         t_min = np.min(spikes)
+#     if t_max is None:
+#         t_max = np.max(spikes)
+
+#     bins = np.linspace(t_min, t_max, np.round((t_max - t_min) / res_ms).astype(int) + 1)
+#     hist_count = np.zeros(len(bins) - 1)
+#     for trial in range(num_trials):
+#         hist_count += np.histogram(spikes[trial], bins=bins)[0]
+#     if num_trials == 0:
+#         rate = np.full_like(hist_count, np.nan)
+#     else:
+#         rate = hist_count / (num_trials * res_ms * 1e-3)
+#     t = bins[:-1] + 0.5 * res_ms
+
+#     if t_smooth is not None: # Allpy Gaussian smoothing
+#         assert t_smooth > 0.0, 'ERROR: Smoothing time constant must be larger than zero ms!'
+#         rate = gaussian_filter1d(rate, sigma=t_smooth / res_ms)
+
+#     return t, rate
 
 
 def load_sim_results(sims):
