@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 from bluepy import Simulation
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter1d
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 
 def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20.0, t_smooth=None):
