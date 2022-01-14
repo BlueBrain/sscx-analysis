@@ -117,7 +117,7 @@ def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
     return t, rate
 
 
-def plot_psth_maps(t_rate, rates, save_path, save_spec=None)
+def plot_psth_maps(t_rate, rates, save_path, save_spec=None):
     """ Plots PSTH overview maps (all cells) for all stimulus conditions. """
 
     if save_spec is None:
@@ -147,7 +147,7 @@ def plot_psth_maps(t_rate, rates, save_path, save_spec=None)
     plt.show()
 
 
-def plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, save_path, save_spec=None)
+def plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, save_path, save_spec=None):
     """ Plots single-trial spikes and PSTHs for N selected GIDs.
         The N most responding GIDs are selected based on their
         average firing rate over all stimulus conditions."""
