@@ -226,26 +226,21 @@ def main():
     cell_filter = params.get('cell_filter') # Cell filter (dict), e.g. {'synapse_class': 'EXC', 'layer': 4}
     psth_res = params.get('psth_res') # PSTH time resolution (ms), e.g. 1.0
     psth_smooth = params.get('psth_smooth') # PSTH Gaussian smoothing time constant (ms), e.g. 20.0
+    do_plot = bool(params.get('do_plot'))
     N_to_plot = params.get('N_cells_to_plot') # Number of most responding cells to plot
-
-    # Label for file names
-    spec_label_base = '-'.join([f'{k}{v}' for k, v in cell_filter.items()])
-    spec_label_base = spec_label_base.replace('synapse_class', '')
-    spec_label_base = spec_label_base.replace('layer', 'L')
-    spec_label_base = '_'.join([cell_target, spec_label_base])
 
     # Run analysis (single cell PSTHs)
     cond_names = sims.index.names
     for cond, cfg_path in sims.iteritems():
-        cond_dict = dict(zip(cond_names, cond))
 
-        sim_id = os.path.split(os.path.split(sims.iloc[0])[0])[-1] # Subfolder name (i.e., 000, 001, ...)
+        cond_dict = dict(zip(cond_names, cond))
+        sim_id = os.path.split(os.path.split(cfg_path)[0])[-1] # Subfolder name (i.e., 000, 001, ...)
         sim_spec = '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) # Sim conditions (e.g., sparsity_1.0__rate_bk_0.2__rate_max_10.0)
 
         # Compute PSTHs
         t_rate, rates, spike_trains, avg_cell_rates, gids, stim_cfg, opto_cfg = get_single_cell_psths(cfg_path, {'target': cell_target, **cell_filter}, t_res=psth_res, t_smooth=psth_smooth)
         res_dict = {'t_rate': t_rate, 'rates': rates, 'spike_trains': spike_trains, 'avg_cell_rates': avg_cell_rates, 'gids': gids, 'stim_cfg': stim_cfg, 'opto_cfg': opto_cfg}
-        res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict})
+        res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'cell_target': cell_target, 'cell_filter': cell_filter, 'psth_res': psth_res, 'psth_smooth': psth_smooth})
 
         # Write to pickled files
         res_file = os.path.join(output_root, f'single_cell_psths__SIM{sim_id}__{sim_spec}.pickle')
@@ -254,8 +249,9 @@ def main():
         print(f'INFO: Single-cell PSTH data written to {res_file}')
 
         # Do some plotting
-        plot_psth_maps(t_rate, rates, avg_cell_rates, output_root, f'_SIM{sim_id}__{sim_spec}')
-        plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, output_root, f'_SIM{sim_id}__{sim_spec}')
+        if do_plot:
+            plot_psth_maps(t_rate, rates, avg_cell_rates, output_root, f'_SIM{sim_id}__{sim_spec}')
+            plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, output_root, f'_SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":
