@@ -1,11 +1,13 @@
 # Description: Analysis to be used with BBP-WORKFLOW analysis launcher for computing
 #              single-cell PSTHs of visual contrast stimulus responses
 # Author: C. Pokorny
-# Created: 13/01/2022
+# Last modified: 14/01/2022
 
 import sys
 import json
 import os
+import pickle
+import numpy as np
 import pandas as pd
 from bluepy import Simulation
 import matplotlib.pyplot as plt
