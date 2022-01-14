@@ -144,15 +144,14 @@ def main():
 
     # Run analysis (single cell PSTHs)
     cond_names = sims.index.names
-    for cond, path in sims.iteritems():
+    for cond, cfg_path in sims.iteritems():
         cond_dict = dict(zip(cond_names, cond))
 
-        sim = Simulation(path)
         sim_id = os.path.split(os.path.split(sims.iloc[0])[0])[-1] # Subfolder name (i.e., 000, 001, ...)
         sim_spec = '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) # Sim conditions (e.g., sparsity_1.0__rate_bk_0.2__rate_max_10.0)
 
         # Compute PSTHs
-        t_rate, rates, spike_trains, avg_cell_rates, gids, stim_cfg, opto_cfg = get_single_cell_psths(sim, {'target': cell_target, **cell_filter}, t_res=psth_res, t_smooth=psth_smooth)
+        t_rate, rates, spike_trains, avg_cell_rates, gids, stim_cfg, opto_cfg = get_single_cell_psths(cfg_path, {'target': cell_target, **cell_filter}, t_res=psth_res, t_smooth=psth_smooth)
         res_dict = {'t_rate': t_rate, 'rates': rates, 'spike_trains': spike_trains, 'avg_cell_rates': avg_cell_rates, 'gids': gids, 'stim_cfg': stim_cfg, 'opto_cfg': opto_cfg}
         res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict})
 
