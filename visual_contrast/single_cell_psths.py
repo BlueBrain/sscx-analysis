@@ -117,6 +117,88 @@ def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
     return t, rate
 
 
+def plot_psth_maps(t_rate, rates, save_path, save_spec=None)
+    """ Plots PSTH overview maps (all cells) for all stimulus conditions. """
+
+    if save_spec is None:
+        save_spec = ''
+    if not isinstance(save_spec, str):
+        save_spec = str(save_spec)
+    if len(save_spec) > 0:
+        save_spec = '_' + save_spec
+
+    # Plot figure
+    num_patterns = len(rates)
+    plt.figure(figsize=(5 * num_patterns, 5))
+    t_res = np.median(np.diff(t_rate))
+    for p in range(num_patterns):
+        plt.subplot(1, num_patterns, p + 1)
+        plt.imshow(rates[p][sort_idx, :], extent=(t_rate[0] - 0.5 * t_res, t_rate[-1] + 0.5 * t_res, rates[p].shape[0] - 0.5, -0.5), aspect='auto', interpolation='nearest')
+        plt.colorbar(label='Firing rate (Hz)')
+        plt.xlabel('Time (ms)')
+        plt.ylabel('Cells (sorted)')
+        if p < num_patterns >> 1: # Patterns assumed to be twice the actual grating patterns, first w/o and second with OPTO stimulation on top
+            plt.title(f'Pattern {p}')
+        else:
+            plt.title(f'Pattern {p - (num_patterns >> 1)}-OPTO')
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, f'psth_overview{save_spec}.png'), dpi=300)
+    plt.show()
+
+
+def plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, save_path, save_spec=None)
+    """ Plots single-trial spikes and PSTHs for N selected GIDs.
+        The N most responding GIDs are selected based on their
+        average firing rate over all stimulus conditions."""
+
+    if N_to_plot is None or N_to_plot <= 0:
+        return # Nothing to plot
+
+    if save_spec is None:
+        save_spec = ''
+    if not isinstance(save_spec, str):
+        save_spec = str(save_spec)
+    if len(save_spec) > 0:
+        save_spec = '_' + save_spec
+
+    # Filter & sort GIDs by increasing average firing rates over all patterns
+    avg_rates_sel = np.nanmean(avg_cell_rates, 0)
+    sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
+    sel_idx = sort_idx[:N_to_plot] # Selecting N gids
+    gids_sel = gids[sel_idx]
+
+    # Define y axis scalings
+    y_scale_range = 0.9
+    y_rate_scale = y_scale_range / np.nanmax(rates)
+    y_trial_scale = y_scale_range / (np.max([[len(spike_trains[p][gid]) for gid in spike_trains[p].keys()] for p in range(len(spike_trains))]) - 1)
+
+    # Plot figure
+    num_patterns = len(rates)
+    plt.figure(figsize=(5 * num_patterns, 5))
+    for p in range(num_patterns):
+        rates_sel = rates[p][sel_idx, :]
+        plt.subplot(1, num_patterns, p + 1)
+        for gidx, gid in enumerate(gids_sel):
+            trials = spike_trains[p][gid]
+            y_offset = len(gids_sel) - 1 - gidx - y_scale_range / 2
+            for trial, st in enumerate(trials):
+                plt.plot(st, np.full(len(st), trial * y_trial_scale + y_offset), '.k', markersize=2.0, markeredgecolor='none')
+            plt.plot(t_rate, rates_sel[gidx, :] * y_rate_scale + y_offset, 'r-')
+        plt.yticks(np.arange(len(gids_sel)), gids_sel[::-1])
+        plt.ylim((-1, len(gids_sel)))
+        plt.xlabel('Time (ms)')
+        plt.ylabel('GID')
+        if p < num_patterns >> 1: # Patterns assumed to be twice the actual grating patterns, first w/o and second with OPTO stimulation on top
+            plt.title(f'Pattern {p}')
+        else:
+            plt.title(f'Pattern {p - (num_patterns >> 1)}-OPTO')
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, f'psth_spikes{save_spec}.png'), dpi=300)
+    plt.show()
+
+
 def main():
 
     # Parse inputs
@@ -140,6 +222,7 @@ def main():
     cell_filter = params.get('cell_filter') # Cell filter (dict), e.g. {'synapse_class': 'EXC', 'layer': 4}
     psth_res = params.get('psth_res') # PSTH time resolution (ms), e.g. 1.0
     psth_smooth = params.get('psth_smooth') # PSTH Gaussian smoothing time constant (ms), e.g. 20.0
+    N_to_plot = params.get('N_cells_to_plot') # Number of most responding cells to plot
 
     # Label for file names
     spec_label_base = '-'.join([f'{k}{v}' for k, v in cell_filter.items()])
@@ -165,6 +248,10 @@ def main():
         with open(res_file, 'wb') as f:
             pickle.dump(res_dict, f)
         print(f'INFO: Single-cell PSTH data written to {res_file}')
+
+        # Do some plotting
+        plot_psth_maps(t_rate, rates, output_root, f'_SIM{sim_id}__{sim_spec}')
+        plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, output_root, f'_SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":
