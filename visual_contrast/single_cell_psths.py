@@ -117,7 +117,7 @@ def instant_firing_rate(spikes, res_ms, t_min=None, t_max=None, t_smooth=None):
     return t, rate
 
 
-def plot_psth_maps(t_rate, rates, save_path, save_spec=None):
+def plot_psth_maps(t_rate, rates, avg_cell_rates, save_path, save_spec=None):
     """ Plots PSTH overview maps (all cells) for all stimulus conditions. """
 
     if save_spec is None:
@@ -126,6 +126,10 @@ def plot_psth_maps(t_rate, rates, save_path, save_spec=None):
         save_spec = str(save_spec)
     if len(save_spec) > 0:
         save_spec = '_' + save_spec
+
+    # Sort GIDs by increasing average firing rates over all patterns
+    avg_rates_sel = np.nanmean(avg_cell_rates, 0)
+    sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
 
     # Plot figure
     num_patterns = len(rates)
@@ -250,7 +254,7 @@ def main():
         print(f'INFO: Single-cell PSTH data written to {res_file}')
 
         # Do some plotting
-        plot_psth_maps(t_rate, rates, output_root, f'_SIM{sim_id}__{sim_spec}')
+        plot_psth_maps(t_rate, rates, avg_cell_rates, output_root, f'_SIM{sim_id}__{sim_spec}')
         plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, output_root, f'_SIM{sim_id}__{sim_spec}')
 
 
