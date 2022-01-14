@@ -1,0 +1,10 @@
+{
+  "show_inputs": 1,
+  "nbins": 5000,
+  "output_root": "./spk_movie_input/",
+  "t_start": 0.0,
+  "t_end": 12000.0,
+  "t_step": 20.0,
+  "condition_filter": {"aperture_radius": 500.0, "rate_max": 100.0},
+  "flatmap": "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/BB_Rat_SSCX_flatmap_v2.nrrd"
+}
