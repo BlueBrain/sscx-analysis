@@ -99,8 +99,9 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     gid_sel = np.isfinite(peak_ratio)
     plt.figure(figsize=(12, 3))
     plt.subplot(1, 4, 1)
-    plt.hist(np.array(t1)[gid_sel], bins=np.linspace(0, np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]), num_bins[0] + 1), width=1.0 * np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]) / num_bins, label='First')
-    plt.hist(np.array(t2)[gid_sel], bins=np.linspace(0, np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]), num_bins[0] + 1), width=1.0 * np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]) / num_bins, label='Second')
+    nbins = num_bins[0]
+    plt.hist(np.array(t1)[gid_sel], bins=np.linspace(0, np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]), nbins + 1), width=1.0 * np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]) / nbins, label='First')
+    plt.hist(np.array(t2)[gid_sel], bins=np.linspace(0, np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]), nbins + 1), width=1.0 * np.max([np.array(t1)[gid_sel], np.array(t2)[gid_sel]]) / nbins, label='Second')
     plt.grid()
     plt.xlabel('Peak time (ms)')
     plt.ylabel('Count')
@@ -108,7 +109,8 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     plt.legend()
 
     plt.subplot(1, 4, 2)
-    plt.hist([np.array(r1)[gid_sel], np.array(r2)[gid_sel]], bins=num_bins[1], label=['First', 'Second'])
+    nbins = num_bins[1]
+    plt.hist([np.array(r1)[gid_sel], np.array(r2)[gid_sel]], bins=nbins, label=['First', 'Second'])
     plt.grid()
     plt.xlabel('Peak rate (Hz)')
     plt.ylabel('Count')
@@ -126,7 +128,8 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     plt.title('First vs. second peak rate')
 
     plt.subplot(1, 4, 4)
-    plt.hist(peak_ratio, bins=num_bins[2], color='tab:purple')
+    nbins = num_bins[2]
+    plt.hist(peak_ratio, bins=nbins, color='tab:purple')
     plt.ylim(plt.ylim())
     plt.plot(np.zeros(2), plt.ylim(), '--k')
     plt.plot(np.full(2, np.nanmean(peak_ratio)), plt.ylim(), '-', color='tab:green', linewidth=3)
