@@ -1,7 +1,7 @@
 # Description: Analysis to be used with BBP-WORKFLOW analysis launcher for computing
 #              single-cell PSTHs of visual contrast stimulus responses
 # Author: C. Pokorny
-# Last modified: 14/01/2022
+# Last modified: 01/2022
 
 import sys
 import json
@@ -242,7 +242,7 @@ def main():
         res_dict = {'t_rate': t_rate, 'rates': rates, 'spike_trains': spike_trains, 'avg_cell_rates': avg_cell_rates, 'gids': gids, 'stim_cfg': stim_cfg, 'opto_cfg': opto_cfg}
         res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'cell_target': cell_target, 'cell_filter': cell_filter, 'psth_res': psth_res, 'psth_smooth': psth_smooth})
 
-        # Write to pickled files
+        # Write to pickled file
         res_file = os.path.join(output_root, f'single_cell_psths__SIM{sim_id}__{sim_spec}.pickle')
         with open(res_file, 'wb') as f:
             pickle.dump(res_dict, f)
