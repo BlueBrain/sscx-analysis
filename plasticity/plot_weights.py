@@ -26,7 +26,7 @@ def plot_gmax_dists(gmax, fig_name):
     gmax_range = [np.min(gmax), np.percentile(gmax, 95)]
     gmax_means = np.mean(gmax, axis=1)
     min_mean, max_mean = np.min(gmax_means), np.max(gmax_means)
-    cmap = plt.get_cmap("viridis")
+    cmap = plt.get_cmap("Reds")
     cmap_idx = (gmax_means - min_mean) / (max_mean - min_mean)  # get them to [0, 1] for cmap
 
     fig = plt.figure(figsize=(10, 6.5))
@@ -183,7 +183,7 @@ def plot_mean_rho_matrix(t, mtypes, rho_matrix, fig_name):
 
 def plot_transition_matrix(transition_matrix, bins, fig_name):
     """Plots transition matrix (on log scale)"""
-    cmap = plt.get_cmap("viridis").copy()
+    cmap = plt.get_cmap("inferno").copy()
     cmap.set_bad(cmap(0.0))
     fig = plt.figure(figsize=(10, 9))
     ax = fig.add_subplot(1, 1, 1)
@@ -265,7 +265,6 @@ def main(project_name):
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
     for idx, sim_path in sim_paths.iteritems():
-        '''
         report_name = "gmax_AMPA"
         data, diffs = get_total_change_by(sim_path, report_name, return_data=True)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_pies.png" % utils.midx2str(idx, level_names))
@@ -289,27 +288,11 @@ def main(project_name):
         last_t, last_df = get_all_synapses_tend(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
         plot_rho_hist(deepcopy(last_t), last_df, fig_name)
-        '''
-        report_name = "rho"
-        h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
-        last_t, last_df = get_all_synapses_tend(sim_path, report_name)
         mtypes, last_rho_matrix = get_mean_rho_matrix(last_df)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_matrix.png" % utils.midx2str(idx, level_names))
         plot_mean_rho_matrix(deepcopy(last_t), mtypes, last_rho_matrix, fig_name)
 
 
 if __name__ == "__main__":
-    project_name = "LayerWiseEShotNoise_PyramidPatterns"  # "5b1420ca-dd31-4def-96d6-46fe99d20dcc"
+    project_name = "LayerWiseEShotNoise_PyramidPatterns_long"
     main(project_name)
-
-
-'''
-import utils
-import os
-project_name = "LayerWiseEShotNoise_PyramidPatterns"
-sim_paths = utils.load_sim_paths(project_name)
-sim_path = sim_paths.iloc[0]
-report_name = "rho"
-h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
-%time data = utils.load_synapse_report(h5f_name, t_start=-1, return_idx=True)
-'''
