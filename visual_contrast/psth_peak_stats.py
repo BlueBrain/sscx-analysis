@@ -267,7 +267,7 @@ def main():
                 plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}', num_bins)
                 
                 if gids_to_plot is not None:
-                    gid_idx_to_plot = [np.where(gids == gid)[0][0] for gid in gids_to_plot]
+                    gid_idx_to_plot = np.array([np.where(gids == gid)[0][0] for gid in gids_to_plot])
                 elif cell_idx_to_plot is not None:
                     avg_rates_sel = np.nanmean(avg_cell_rates, 0)
                     sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
