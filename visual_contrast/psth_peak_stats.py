@@ -178,6 +178,7 @@ def main():
             os.makedirs(figs_path)
 
     # Check input data existence first & run analysis (peak statistics)
+    cond_names = sims.index.names
     for check_only in [True, False]:
         for cond, cfg_path in sims.iteritems():
 
