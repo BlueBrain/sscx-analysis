@@ -58,7 +58,7 @@ def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, sav
         save_spec = ''
     if not isinstance(save_spec, str):
         save_spec = str(save_spec)
-    if len(save_spec) > 0:
+    if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
     gid_sel = np.isfinite(peak_ratio)
@@ -85,7 +85,7 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
         save_spec = ''
     if not isinstance(save_spec, str):
         save_spec = str(save_spec)
-    if len(save_spec) > 0:
+    if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
     if num_bins is None:
@@ -154,7 +154,7 @@ def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t
         save_spec = ''
     if not isinstance(save_spec, str):
         save_spec = str(save_spec)
-    if len(save_spec) > 0:
+    if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
     if gid_idx_to_plot is None or len(gid_idx_to_plot) == 0:
@@ -203,6 +203,7 @@ def main():
     assert output_root is not None, 'ERROR: Output root folder not specified!'
 
     psth_name = params.get('psth_name') # PSTH folder/filename to load PSTH data from (will be appended by sim condition specifier)
+    name_suffix = params.get('name_suffix', '') # PSTH filename suffix to load specific PSTH data from, e.g. '__hex0_EXC_L4'
     psth_path = os.path.join(os.path.normpath(os.path.join(output_root, '..')), psth_name)
     pattern_idx = params.get('pattern_idx') # Grating pattern (contrast) index to compute peak statistics from (N patterns: idx 0..N-1 w/o opto, idx N..2N-1 with opto)
     peak_th = params.get('peak_th') # Peak detection threshold (Hz)
@@ -234,8 +235,8 @@ def main():
             sim_spec = '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) # Sim conditions (e.g., sparsity_1.0__rate_bk_0.2__rate_max_10.0)
 
             # Check PSTH data
-            psth_file = os.path.join(psth_path, f'{psth_name}__SIM{sim_id}__{sim_spec}.pickle')
-            assert os.path.exists(psth_file), f'ERROR: Required PSTH data file {psth_file} not found! Please run "{psth_name}" analysis first!'
+            psth_file = os.path.join(psth_path, f'{psth_name}{name_suffix}__SIM{sim_id}__{sim_spec}.pickle')
+            assert os.path.exists(psth_file), f'ERROR: Required PSTH data file {psth_file} not found! Please run "{psth_name}" analysis first and/or specify correct name suffix!'
             if check_only:
                 continue
 
@@ -262,9 +263,9 @@ def main():
             print(f'INFO: PSTH peak statistics written to {res_file}')
 
             # Do some plotting
-            if do_plot:                
-                plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
-                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}', num_bins)
+            if do_plot:
+                plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}')
+                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}', num_bins)
                 
                 if gids_to_plot is not None:
                     gid_idx_to_plot = np.array([np.where(gids == gid)[0][0] for gid in gids_to_plot])
@@ -274,7 +275,7 @@ def main():
                     gid_idx_to_plot = sort_idx[cell_idx_to_plot]
                 else:
                     gid_idx_to_plot = None
-                plot_peak_examples(gid_idx_to_plot, t_rate, rates[pattern_idx], spike_trains[pattern_idx], gids, t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
+                plot_peak_examples(gid_idx_to_plot, t_rate, rates[pattern_idx], spike_trains[pattern_idx], gids, t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":

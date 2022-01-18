@@ -124,7 +124,7 @@ def plot_psth_maps(t_rate, rates, avg_cell_rates, save_path, save_spec=None):
         save_spec = ''
     if not isinstance(save_spec, str):
         save_spec = str(save_spec)
-    if len(save_spec) > 0:
+    if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
     # Sort GIDs by increasing average firing rates over all patterns
@@ -163,7 +163,7 @@ def plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_pl
         save_spec = ''
     if not isinstance(save_spec, str):
         save_spec = str(save_spec)
-    if len(save_spec) > 0:
+    if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
     # Filter & sort GIDs by increasing average firing rates over all patterns
@@ -223,11 +223,22 @@ def main():
     assert output_root is not None, 'ERROR: Output root folder not specified!'
 
     cell_target = params.get('cell_target') # Cell target (str), e.g. 'hex0'
-    cell_filter = params.get('cell_filter') # Cell filter (dict), e.g. {'synapse_class': 'EXC', 'layer': 4}
+    cell_filter = params.get('cell_filter', {}) # Cell filter (dict), e.g. {'synapse_class': 'EXC', 'layer': 4}
     psth_res = params.get('psth_res') # PSTH time resolution (ms), e.g. 1.0
     psth_smooth = params.get('psth_smooth') # PSTH Gaussian smoothing time constant (ms), e.g. 20.0
     do_plot = bool(params.get('do_plot'))
     N_to_plot = params.get('N_cells_to_plot') # Number of most responding cells to plot
+
+    cell_label = '-'.join([f'{k}{v}' for k, v in cell_filter.items()])
+    cell_label = cell_label.replace('synapse_class', '')
+    cell_label = cell_label.replace('layer', 'L')
+    if cell_target is not None:
+        if len(cell_label) == 0:
+            cell_label = cell_target
+        else:
+            cell_label = '_'.join([cell_target, cell_label])
+    if len(cell_label) > 0:
+        cell_label = f'__{cell_label}''
 
     if do_plot:
         figs_path = os.path.join(output_root, 'figs')
@@ -248,15 +259,15 @@ def main():
         res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'cell_target': cell_target, 'cell_filter': cell_filter, 'psth_res': psth_res, 'psth_smooth': psth_smooth})
 
         # Write to pickled file
-        res_file = os.path.join(output_root, f'single_cell_psths__SIM{sim_id}__{sim_spec}.pickle')
+        res_file = os.path.join(output_root, f'single_cell_psths{cell_label}__SIM{sim_id}__{sim_spec}.pickle')
         with open(res_file, 'wb') as f:
             pickle.dump(res_dict, f)
         print(f'INFO: Single-cell PSTH data written to {res_file}')
 
         # Do some plotting
         if do_plot:
-            plot_psth_maps(t_rate, rates, avg_cell_rates, figs_path, f'_SIM{sim_id}__{sim_spec}')
-            plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, figs_path, f'_SIM{sim_id}__{sim_spec}')
+            plot_psth_maps(t_rate, rates, avg_cell_rates, figs_path, f'{cell_label}__SIM{sim_id}__{sim_spec}')
+            plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, figs_path, f'{cell_label}__SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":
