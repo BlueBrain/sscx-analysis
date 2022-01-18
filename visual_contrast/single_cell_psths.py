@@ -238,7 +238,7 @@ def main():
         else:
             cell_label = '_'.join([cell_target, cell_label])
     if len(cell_label) > 0:
-        cell_label = f'__{cell_label}''
+        cell_label = '__' + cell_label
 
     if do_plot:
         figs_path = os.path.join(output_root, 'figs')
