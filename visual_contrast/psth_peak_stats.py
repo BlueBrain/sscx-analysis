@@ -162,14 +162,20 @@ def main():
     output_root = params.get('output_root')
     assert output_root is not None, 'ERROR: Output root folder not specified!'
 
-    psth_base_fn = params.get('psth_base_fn') # Base filename to load PSTH data from (will be appended by sim condition specifier)
+    psth_name = params.get('psth_name') # PSTH folder/filename to load PSTH data from (will be appended by sim condition specifier)
+    psth_path = os.path.join(os.path.normpath(os.path.join(output_root, '..')), psth_name)
     pattern_idx = params.get('pattern_idx') # Grating pattern (contrast) index to compute peak statistics from (N patterns: idx 0..N-1 w/o opto, idx N..2N-1 with opto)
     peak_th = params.get('peak_th') # Peak detection threshold (Hz)
     peak_width = params.get('peak_width') # Min. peak width (ms)
     peak_distance = params.get('peak_distance') # Min. distance between peaks (ms)
     peak_range = params.get('peak_range') # Time range to detect peaks, e.g. [0.0, 1000.0]
-    num_bins = params.get('num_bins') # Number of bins for (i) peak time, (ii) peak rate, (iii) peak ratio histograms (scalar of 3 items list)
     do_plot = bool(params.get('do_plot'))
+    num_bins = params.get('num_bins') # Number of bins for (i) peak time, (ii) peak rate, (iii) peak ratio histograms (scalar of 3 items list)
+
+    if do_plot:
+        figs_path = os.path.join(output_root, 'figs')
+        if not os.path.exists(figs_path):
+            os.makedirs(figs_path)
 
     # Check input data existence first & run analysis (peak statistics)
     for check_only in [True, False]:
@@ -180,7 +186,7 @@ def main():
             sim_spec = '__'.join([f'{k}_{v}' for k, v in cond_dict.items()]) # Sim conditions (e.g., sparsity_1.0__rate_bk_0.2__rate_max_10.0)
 
             # Check PSTH data
-            psth_file = os.path.join(output_root, f'{psth_base_fn}__SIM{sim_id}__{sim_spec}.pickle')
+            psth_file = os.path.join(psth_path, f'{psth_name}__SIM{sim_id}__{sim_spec}.pickle')
             assert os.path.exists(psth_file), f'ERROR: PSTH data file {psth_file} not found! Run "single_cell_psths" first!'
             if check_only:
                 continue
@@ -205,9 +211,9 @@ def main():
             print(f'INFO: PSTH peak statistics written to {res_file}')
 
             # Do some plotting
-            if do_plot:
-                plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, output_root, f'_SIM{sim_id}__{sim_spec}')
-                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, num_bins, output_root, f'_SIM{sim_id}__{sim_spec}')
+            if do_plot:                
+                plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
+                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, num_bins, figs_path, f'_SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":

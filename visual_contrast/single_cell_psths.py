@@ -229,6 +229,11 @@ def main():
     do_plot = bool(params.get('do_plot'))
     N_to_plot = params.get('N_cells_to_plot') # Number of most responding cells to plot
 
+    if do_plot:
+        figs_path = os.path.join(output_root, 'figs')
+        if not os.path.exists(figs_path):
+            os.makedirs(figs_path)
+
     # Run analysis (single cell PSTHs)
     cond_names = sims.index.names
     for cond, cfg_path in sims.iteritems():
@@ -250,8 +255,8 @@ def main():
 
         # Do some plotting
         if do_plot:
-            plot_psth_maps(t_rate, rates, avg_cell_rates, output_root, f'_SIM{sim_id}__{sim_spec}')
-            plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, output_root, f'_SIM{sim_id}__{sim_spec}')
+            plot_psth_maps(t_rate, rates, avg_cell_rates, figs_path, f'_SIM{sim_id}__{sim_spec}')
+            plot_psths_spikes(t_rate, rates, spike_trains, avg_cell_rates, gids, N_to_plot, figs_path, f'_SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":
