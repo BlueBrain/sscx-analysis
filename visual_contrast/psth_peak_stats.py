@@ -163,7 +163,7 @@ def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t
 
     for gidx in gid_idx_to_plot:
         gid = gids[gidx]
-        plt.figure(figsize=(10, 1))
+        plt.figure(figsize=(10, 3))
         plt.plot(t_rate, rates[gidx, :], 'k')
         plt.plot(t1[gidx], r1[gidx], 'x', color='tab:blue', markersize=10, clip_on=False, label='First peak')
         plt.plot(t2[gidx], r2[gidx], 'x', color='tab:orange', markersize=10, clip_on=False, label='Second peak')
@@ -177,6 +177,7 @@ def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t
         plt.ylabel('Firing rate (Hz)')
         plt.title(f'GID {gid} (peak_ratio={peak_ratio[gidx]:.3})', fontweight='bold')
         plt.legend(loc='upper left', bbox_to_anchor=[1.0, 1.0])
+        plt.tight_layout()
         if save_path is not None:
             plt.savefig(os.path.join(save_path, f'psth_rate_peaks{save_spec}_GID{gid}.png'), dpi=300)
     plt.show()
