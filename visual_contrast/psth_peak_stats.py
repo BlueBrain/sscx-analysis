@@ -257,7 +257,7 @@ def main():
             res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'pattern_idx': pattern_idx, 'peak_th': peak_th, 'peak_width': peak_width, 'peak_distance': peak_distance, 'peak_range': peak_range})
 
             # Write to pickled file
-            res_file = os.path.join(output_root, f'psth_peak_stats__SIM{sim_id}__{sim_spec}.pickle')
+            res_file = os.path.join(output_root, f'psth_peak_stats{name_suffix}__SIM{sim_id}__{sim_spec}.pickle')
             with open(res_file, 'wb') as f:
                 pickle.dump(res_dict, f)
             print(f'INFO: PSTH peak statistics written to {res_file}')
