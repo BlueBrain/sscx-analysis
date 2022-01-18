@@ -164,7 +164,7 @@ def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t
     for gidx in gid_idx_to_plot:
         gid = gids[gidx]
         plt.figure(figsize=(10, 1))
-        plt.plot(t_rate, rates[cgdx, :], 'k')
+        plt.plot(t_rate, rates[gidx, :], 'k')
         plt.plot(t1[gidx], r1[gidx], 'x', color='tab:blue', markersize=10, clip_on=False, label='First peak')
         plt.plot(t2[gidx], r2[gidx], 'x', color='tab:orange', markersize=10, clip_on=False, label='Second peak')
         plt.ylim(plt.ylim())
