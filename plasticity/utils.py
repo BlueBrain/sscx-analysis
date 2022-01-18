@@ -152,11 +152,17 @@ def reindex_report(data):
     """Re-indexes synapse report from (Neurodamus style) post_gid & local_syn_idx MultiIndex
     to (bluepy style) single global_syn_idx"""
     # load mapping df, which has (and is ordered by) the global_syn_idx
-    syn_df = pd.read_pickle(MAPPING_SYNF_NAME)
+    syn_df = load_mapping_df()
     # sort report columns to have the same ordering as the mapping df
     data.sort_index(axis=1, inplace=True)
     data.columns = syn_df.index
     return data
+
+
+def load_mapping_df(features=None):
+    """Loads bluepy style synapse DataFrame of pre_gids, post_gid & (Neurodamus style) local_syn_idx"""
+    syn_df = pd.read_pickle(MAPPING_SYNF_NAME)
+    return syn_df[features] if features is not None else syn_df
 
 
 def load_nonrep_syn_df(report_name=None):
