@@ -188,7 +188,7 @@ def main():
 
             # Check PSTH data
             psth_file = os.path.join(psth_path, f'{psth_name}__SIM{sim_id}__{sim_spec}.pickle')
-            assert os.path.exists(psth_file), f'ERROR: PSTH data file {psth_file} not found! Run "single_cell_psths" first!'
+            assert os.path.exists(psth_file), f'ERROR: Required PSTH data file {psth_file} not found! Please run "{psth_name}" analysis first!'
             if check_only:
                 continue
 
