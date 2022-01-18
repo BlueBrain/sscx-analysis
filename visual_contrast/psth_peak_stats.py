@@ -78,7 +78,7 @@ def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, sav
     plt.show()
 
 
-def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, num_bins=None, save_path, save_spec=None):
+def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, num_bins=None):
     """ Plot peak statistics of first vs. second peak """
 
     if save_spec is None:
