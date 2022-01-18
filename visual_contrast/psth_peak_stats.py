@@ -146,6 +146,42 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     plt.show()
 
 
+def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t2, r1, r2, peak_ratio, save_path, save_spec=None):
+    """ Plot spikes, firing rate PSTH, and detected peaks
+        for selected exemplary cell indices """
+
+    if save_spec is None:
+        save_spec = ''
+    if not isinstance(save_spec, str):
+        save_spec = str(save_spec)
+    if len(save_spec) > 0:
+        save_spec = '_' + save_spec
+
+    if gid_idx_to_plot is None or len(gid_idx_to_plot) == 0:
+        return # Nothing to plot
+    assert np.all(gid_idx_to_plot >= 0) and np.all(gid_idx_to_plot < len(gids)), 'ERROR: Cell plot indices out of range!'
+
+    for gidx in gid_idx_to_plot:
+        gid = gids[gidx]
+        plt.figure(figsize=(10, 1))
+        plt.plot(t_rate, rates[cgdx, :], 'k')
+        plt.plot(t1[gidx], r1[gidx], 'x', color='tab:blue', markersize=10, clip_on=False, label='First peak')
+        plt.plot(t2[gidx], r2[gidx], 'x', color='tab:orange', markersize=10, clip_on=False, label='Second peak')
+        plt.ylim(plt.ylim())
+        trials = spike_trains[gid]
+        y_scale = np.diff(plt.ylim()) / len(trials)
+        for trial, st in enumerate(trials):
+            plt.plot(st, np.full(len(st), (trial - 0.5 * (len(trials) - 1)) * y_scale + np.mean(plt.ylim())), '|g', markersize=5.0)
+        plt.grid()
+        plt.xlabel('Time (ms)')
+        plt.ylabel('Firing rate (Hz)')
+        plt.title(f'GID {gid} (peak_ratio={peak_ratio[gidx]:.3})', fontweight='bold')
+        plt.legend(loc='upper left', bbox_to_anchor=[1.0, 1.0])
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, f'psth_rate_peaks{save_spec}_GID{gid}.png'), dpi=300)
+    plt.show()
+
+
 def main():
 
     # Parse inputs
@@ -174,11 +210,18 @@ def main():
     peak_range = params.get('peak_range') # Time range to detect peaks, e.g. [0.0, 1000.0]
     do_plot = bool(params.get('do_plot'))
     num_bins = params.get('num_bins') # Number of bins for (i) peak time, (ii) peak rate, (iii) peak ratio histograms (scalar of 3 items list)
+    gids_to_plot = params.get('gids_to_plot') # List of exemplary GIDs to plot in detail OR
+    cell_idx_to_plot = params.get('cell_idx_to_plot') # List of (sorted) cell indices to plot in detail
 
     if do_plot:
         figs_path = os.path.join(output_root, 'figs')
         if not os.path.exists(figs_path):
             os.makedirs(figs_path)
+
+        if gids_to_plot is not None:
+            assert cell_idx_to_plot is None, 'ERROR: Either "cell_idx_to_plot" or "gids_to_plot" can be specified!'
+        if cell_idx_to_plot is not None:
+            assert gids_to_plot is None, 'ERROR: Either "cell_idx_to_plot" or "gids_to_plot" can be specified!'
 
     # Check input data existence first & run analysis (peak statistics)
     cond_names = sims.index.names
@@ -202,6 +245,9 @@ def main():
             assert cond_dict == psth_data['cond_dict'], 'ERROR: Sim conditions mismatch!'
             t_rate = psth_data['t_rate']
             rates = psth_data['rates']
+            avg_cell_rates = psth_data['avg_cell_rates']
+            spike_trains = psth_data['spike_trains']
+            gids = psth_data['gids']
 
             # Compute peak statistics
             peak_idx, t1, t2, r1, r2, peak_ratio = detect_rate_peaks(t_rate, rates[pattern_idx], peak_th=peak_th, peak_width=peak_width, peak_distance=peak_distance, t_range=peak_range)
@@ -218,6 +264,16 @@ def main():
             if do_plot:                
                 plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
                 plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}', num_bins)
+                
+                if gids_to_plot is not None:
+                    gid_idx_to_plot = [np.where(gids == gid)[0][0] for gid in gids_to_plot]
+                elif cell_idx_to_plot is not None:
+                    avg_rates_sel = np.nanmean(avg_cell_rates, 0)
+                    sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
+                    gid_idx_to_plot = sort_idx[cell_idx_to_plot]
+                else:
+                    gid_idx_to_plot = None
+                plot_peak_examples(gid_idx_to_plot, t_rate, rates[pattern_idx], spike_trains[pattern_idx], gids, t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
 
 
 if __name__ == "__main__":
