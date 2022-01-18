@@ -217,7 +217,7 @@ def main():
             # Do some plotting
             if do_plot:                
                 plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}')
-                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, num_bins, figs_path, f'_SIM{sim_id}__{sim_spec}')
+                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'_SIM{sim_id}__{sim_spec}', num_bins)
 
 
 if __name__ == "__main__":
