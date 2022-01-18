@@ -63,7 +63,7 @@ def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, sav
 
     gid_sel = np.isfinite(peak_ratio)
     plt.figure(figsize=(8, 3))
-    plt.plot(t_rate, rates_sel.T, 'k', alpha=0.25)
+    plt.plot(t_rate, rates.T, 'k', alpha=0.25)
     for idx in range(np.sum(gid_sel)):
         plt.plot(np.array(t1)[gid_sel][idx], np.array(r1)[gid_sel][idx], 'x', color='tab:blue', alpha=1.0, label='First peak' if idx == 0 else None)
         plt.plot(np.array(t2)[gid_sel][idx], np.array(r2)[gid_sel][idx], 'x', color='tab:orange', alpha=1.0, label='Second peak' if idx == 0 else None)
