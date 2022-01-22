@@ -121,16 +121,29 @@ def load_patterns(project_name, seed=None):
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
 
+def load_synapse_clusters(seed, sim_path):
+    """Loads synapse clusters for given `seed` saved by `assemblyfire`"""
+    base_dir = os.path.join(os.path.split(os.path.split(sim_path)[0])[0], "analyses", "seed%i_syn_clusters" % seed)
+    syn_clusters, gids = {}, np.array([])
+    for f_name in os.listdir(base_dir):
+        if f_name[-4:] == ".pkl":
+            df = pd.read_pickle(os.path.join(base_dir, f_name))
+            syn_clusters[int(f_name.split("assembly")[1].split(".pkl")[0])] = df
+            gids = np.concatenate((gids, df["post_gid"].unique()))
+    return syn_clusters, gids
+
+
 def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=None, return_idx=False):
     """Fast, pure libsonata, in line implementation of report.get()"""
     report = ElementReportReader(h5f_name)
     report = report[list(report.get_population_names())[0]]
     time = np.arange(*report.times)
-    if t_start == -1 and t_end == 0:
-        raise NotImplementedError("Loading only the first and last time steps is not implemented yet")
-    if t_end == 0 and t_start != -1:  # special case of loading only the first time step
+    if t_start == 0 and t_end == -1:  # special case of loading only the first and last time steps
+        t_start = time[0]; t_end = time[-1]
+        t_step = t_end - t_start
+    if t_end == 0:  # special case of loading only the first time step
         t_start = t_end = time[0]
-    if t_start == -1 and t_end != 0:  # special case of loading only the last time step
+    if t_start == -1:  # special case of loading only the last time step
         t_start = t_end = time[-1]
     t_stride = round(t_step/report.times[2]) if t_step is not None else None
     report_gids = np.asarray(report.get_node_ids()) + 1
@@ -148,21 +161,28 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
         return view.times, view.data
 
 
-def reindex_report(data):
+def reindex_report(data, mapping_df):
     """Re-indexes synapse report from (Neurodamus style) post_gid & local_syn_idx MultiIndex
     to (bluepy style) single global_syn_idx"""
-    # load mapping df, which has (and is ordered by) the global_syn_idx
-    syn_df = load_mapping_df()
     # sort report columns to have the same ordering as the mapping df
     data.sort_index(axis=1, inplace=True)
-    data.columns = syn_df.index
+    data = data.transpose(copy=False)
+    data.index = mapping_df.index
     return data
 
 
 def load_mapping_df(features=None):
     """Loads bluepy style synapse DataFrame of pre_gids, post_gid & (Neurodamus style) local_syn_idx"""
-    syn_df = pd.read_pickle(MAPPING_SYNF_NAME)
-    return syn_df[features] if features is not None else syn_df
+    mapping_df = pd.read_pickle(MAPPING_SYNF_NAME)
+    return mapping_df[features] if features is not None else mapping_df
+
+
+def calc_mapping_df(sonata_fn, mi, features=None):
+    """Uses conntility to get synapse mapping (bluepy style synapse DataFrame of pre_gids, post_gig
+    & (Neurodamus style) local_syn_idx) for report's pd.MuliIndex (`mi`)"""
+    from conntility.io.synapse_report import get_presyn_mapping
+    mapping_df = get_presyn_mapping(sonata_fn, mi)
+    return mapping_df[features] if features is not None else mapping_df
 
 
 def load_nonrep_syn_df(report_name=None):
@@ -189,14 +209,28 @@ def get_all_synapses_at_t(sim_path, report_name, t):
         data = load_synapse_report(h5f_name, t_start=t, t_end=t, return_idx=True)
     report_t = data.index.to_numpy()[0]
     # reindex it, transpose it and rename column index
-    data = reindex_report(data)
-    data = data.transpose(copy=False)
+    mapping_df = load_mapping_df()  # load mapping df, which has (and is ordered by) the global_syn_idx
+    data = reindex_report(data, mapping_df)
     data.columns = pd.Index([report_name])
     # load non-reported values, convert them to float DF and merge the 2 datasets
     nonrep_data = load_nonrep_syn_df(report_name)
     data = data.append(nonrep_data.to_frame().astype(np.float64))
     data.sort_index(inplace=True)
     return report_t, data
+
+
+def get_synapse_changes(sim_path, report_name, gids):
+    """Gets total change (last reported t - first reported t) of synapses on `gids`"""
+    from bluepy import Circuit
+    c = Circuit(sim_path)
+    # load first and last time steps
+    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+    data = load_synapse_report(h5f_name, t_start=0, t_end=-1, gids=gids, return_idx=True)
+    # reindex, transpose and make diff
+    mapping_df = calc_mapping_df(c.config["connectome"], data.columns)
+    data = reindex_report(data, mapping_df)
+    return pd.Series(data=np.diff(data.to_numpy(), axis=1).reshape(-1),
+                     index=data.index, name="delta_%s" % report_name)
 
 
 def split_synapse_report(c, data, split_by):
