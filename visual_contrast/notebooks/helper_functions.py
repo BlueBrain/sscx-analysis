@@ -1,6 +1,6 @@
 # Helper functions for grating and opto stimulus analysis
 # Author: C. Pokorny
-# Last modified: 12/2021
+# Last modified: 01/2022
 
 import numpy as np
 import pandas as pd
@@ -12,37 +12,38 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 
 
-def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance=200.0, t_range=None):
-    """
-    Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
-    using peak_th (Hz), peak_width (ms), peak_distance (ms), within given time
-    range and selecting the two highest peaks
-    """
-    t_res = np.median(np.diff(t_rate))
-    peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
+### MOVED TO psth_peak_stats.py ###
+# def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance=200.0, t_range=None):
+#     """
+#     Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
+#     using peak_th (Hz), peak_width (ms), peak_distance (ms), within given time
+#     range and selecting the two highest peaks
+#     """
+#     t_res = np.median(np.diff(t_rate))
+#     peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
 
-    # Remove out-of-range peaks
-    if t_range is not None:
-        for idx, pidx in enumerate(peak_idx):
-            peak_idx[idx] = pidx[np.logical_and(t_rate[pidx] >= t_range[0], t_rate[pidx] < t_range[1])]
+#     # Remove out-of-range peaks
+#     if t_range is not None:
+#         for idx, pidx in enumerate(peak_idx):
+#             peak_idx[idx] = pidx[np.logical_and(t_rate[pidx] >= t_range[0], t_rate[pidx] < t_range[1])]
 
-    # In case of more than two (remaining) peaks: keep only two highest
-    for idx, pidx in enumerate(peak_idx):
-        r = rates[idx][pidx]
-        sel = np.argsort(r)[:-3:-1] # Find two highest
-        peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
+#     # In case of more than two (remaining) peaks: keep only two highest
+#     for idx, pidx in enumerate(peak_idx):
+#         r = rates[idx][pidx]
+#         sel = np.argsort(r)[:-3:-1] # Find two highest
+#         peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
 
-    peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
-    peak_t = [t_rate[pidx] for pidx in peak_idx]
+#     peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
+#     peak_t = [t_rate[pidx] for pidx in peak_idx]
 
-    t1 = [t[0] if len(t) > 0 else np.nan for t in peak_t] # First peak time
-    t2 = [t[1] if len(t) > 1 else np.nan for t in peak_t] # Second peak time
-    r1 = [r[0] if len(r) > 0 else np.nan for r in peak_rate] # First peak rate
-    r2 = [r[1] if len(r) > 1 else np.nan for r in peak_rate] # Second peak rate
+#     t1 = [t[0] if len(t) > 0 else np.nan for t in peak_t] # First peak time
+#     t2 = [t[1] if len(t) > 1 else np.nan for t in peak_t] # Second peak time
+#     r1 = [r[0] if len(r) > 0 else np.nan for r in peak_rate] # First peak rate
+#     r2 = [r[1] if len(r) > 1 else np.nan for r in peak_rate] # Second peak rate
 
-    peak_ratio = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
+#     peak_ratio = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
 
-    return peak_idx, t1, t2, r1, r2, peak_ratio
+#     return peak_idx, t1, t2, r1, r2, peak_ratio
 
 
 ### ALTERNATIVE IMPLEMENTATION ###
