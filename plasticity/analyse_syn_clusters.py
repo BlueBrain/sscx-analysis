@@ -4,6 +4,7 @@ author: András Ecker, last update: 01.2022
 """
 
 import os
+from copy import deepcopy
 import numpy as np
 import utils
 import matplotlib
@@ -17,78 +18,107 @@ FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/v7_assemblies"
 RED, BLUE = "#e32b14", "#3271b8"
 
 
-def group_diffs(syn_clusters, diffs, nsyn_samples=100):
+def get_change_probs(syn_clusters, diffs):
+    """Gets probabilities of potentiated, unchanged, and depressed synapses"""
+    probs = {}
+    for assembly_label, syn_cluster in syn_clusters.items():
+        assembly_diffs = diffs.loc[syn_cluster.index]
+        n_syns = len(assembly_diffs)
+        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0.5]), len(assembly_diffs[assembly_diffs < -0.5])
+        assembly_probs = np.array([potentiated, 0., depressed]) / n_syns
+        assembly_probs[1] = 1 - np.sum(assembly_probs)
+        probs[assembly_label] = assembly_probs
+    return probs
+
+
+def group_diffs(syn_clusters, diffs):
     """
-    Groups efficacy differences (rho at last time step - rho at first time step) on samples neurons based on
-    2 criteria: 1) synapse is coming from assembly neuron vs. non-assembly neuron
-                2) synapse is part of a synapse cluster (clustering done in `assemblyfire`) vs. not
-    (It's neither the prettiest nor the most flexible function ever... but it does the job)
+    Groups efficacy differences (rho at last time step - rho at first time step) in sample neurons from assemblies
+    based on 2 criteria: 1) synapse is coming from assembly neuron vs. non-assembly neuron (fist +/-)
+                         2) synapse is part of a synapse cluster (clustering done in `assemblyfire`) vs. not (second +/-)
     """
     assembly_labels = np.sort(list(syn_clusters.keys()))
-    sizes, pot_matrices, dep_matrices = {}, {}, {}
+    grouped_diffs = {assembly_label: {} for assembly_label in assembly_labels}
     for assembly_label in assembly_labels:
-        # get ratios of potentiated vs. depressed synapses for a given assembly
-        assembly_diffs = diffs.loc[syn_clusters[assembly_label].index]
-        n_syns = len(assembly_diffs)
-        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0]), len(assembly_diffs[assembly_diffs < 0])
-        sizes[assembly_label] = np.array([potentiated, n_syns - (potentiated + depressed), depressed])
         # get diffs for all 4 cases
         assembly_syns = syn_clusters[assembly_label]["assembly%i" % assembly_label]
         non_assembly_syns = syn_clusters[assembly_label]["non_assembly"]
-        assembly_cluster_diffs = diffs.loc[assembly_syns[assembly_syns > 0].index]
-        assembly_nc_diffs = diffs.loc[assembly_syns[assembly_syns == -1].index]
-        non_assembly_cluster_diffs = diffs.loc[non_assembly_syns[non_assembly_syns > 0].index]
-        non_assembly_nc_diffs = diffs.loc[non_assembly_syns[non_assembly_syns == -1].index]
-        # get samples for potentiation and depression for all 4 cases
-        pot_matrix, dep_matrix = np.zeros((2, 2)), np.zeros((2, 2))
-        pot_matrix[0, 0] = assembly_cluster_diffs[assembly_cluster_diffs > 0].mean()
-        pot_matrix[0, 1] = assembly_nc_diffs[assembly_nc_diffs > 0].mean()
-        pot_matrix[1, 0] = non_assembly_cluster_diffs[non_assembly_cluster_diffs > 0].mean()
-        pot_matrix[1, 1] = non_assembly_nc_diffs[non_assembly_nc_diffs > 0].mean()
-        dep_matrix[0, 0] = -1 * assembly_cluster_diffs[assembly_cluster_diffs < 0].mean()
-        dep_matrix[0, 1] = -1 * assembly_nc_diffs[assembly_nc_diffs < 0].mean()
-        dep_matrix[1, 0] = -1 * non_assembly_cluster_diffs[non_assembly_cluster_diffs < 0].mean()
-        dep_matrix[1, 1] = -1 * non_assembly_nc_diffs[non_assembly_nc_diffs < 0].mean()
-        pot_matrices[assembly_label], dep_matrices[assembly_label] = pot_matrix, dep_matrix
-    return sizes, pot_matrices, dep_matrices
+        grouped_diffs[assembly_label]["++"] = diffs.loc[assembly_syns[assembly_syns >= 0].index]
+        grouped_diffs[assembly_label]["+-"] = diffs.loc[assembly_syns[assembly_syns == -1].index]
+        grouped_diffs[assembly_label]["-+"] = diffs.loc[non_assembly_syns[non_assembly_syns >= 0].index]
+        grouped_diffs[assembly_label]["--"] = diffs.loc[non_assembly_syns[non_assembly_syns == -1].index]
+    return grouped_diffs
 
 
-def plot_grouped_diffs(sizes, pot_matrices, dep_matrices, fig_name):
-    """For every assembly plots pie chart with total changes and 2 matrices
-    with the ammount of potentiation and depression (in a 2x2 grid - see `group_diffs()` above)"""
+def get_michelson_contrast(probs, group_diffs):
+    """Gets Michelson contrast (aka. visibility) defined as:
+    P(pot/dep | condition) - P(pot/dep) / (P(pot/dep | condition) + P(pot/dep))"""
+    pot_contrasts, dep_contrasts = {}, {}
+    for assembly_label, uncond_probs in probs.items():
+        p_pot, p_dep = uncond_probs[0], uncond_probs[2]  # unchanged is the 2nd element, which we won't use here
+        pot_contrast, dep_contrast = np.zeros((2, 2)), np.zeros((2, 2))
+        for i, assembly in enumerate(["+", "-"]):
+            for j, clustered in enumerate(["+", "-"]):
+                df = group_diffs[assembly_label][assembly + clustered]
+                n_syns = len(df)
+                p_pot_cond = len(df[df > 0.5]) / n_syns
+                pot_contrast[i, j] = (p_pot_cond - p_pot) / (p_pot_cond + p_pot)
+                p_dep_cond = len(df[df < -0.5]) / n_syns
+                dep_contrast[i, j] = (p_dep_cond - p_dep) / (p_dep_cond + p_dep)
+        pot_contrasts[assembly_label], dep_contrasts[assembly_label] = pot_contrast, dep_contrast
+    return pot_contrasts, dep_contrasts
+
+
+def _clip_matrices(matrices, min_clip=0, max_clip=None):
+    """Helper function that sets values to NaN before plotting"""
+    clipped_matrices = deepcopy(matrices)
+    for label, matrix in clipped_matrices.items():
+        if min_clip is not None:
+            matrix[matrix < min_clip] = np.nan
+        if max_clip is not None:
+            matrix[matrix > max_clip] = np.nan
+    return clipped_matrices
+
+
+def plot_grouped_diffs(probs, pot_matrices, dep_matrices, fig_name):
+    """For every assembly plots pie chart with total changes in sample neurons and 2 matrices
+    with the cond. prob. of potentiation and depression (in a 2x2 grid - see `group_diffs()` above)"""
     plt.rcParams["patch.edgecolor"] = "black"
-    assembly_labels = np.sort(list(sizes.keys()))
+    pot_cmap = plt.get_cmap("Reds").copy()
+    pot_cmap.set_bad((0, 0, 0))
+    dep_cmap = plt.get_cmap("Blues").copy()
+    dep_cmap.set_bad((0, 0, 0))
+    assembly_labels = np.sort(list(probs.keys()))
     n = len(assembly_labels)
-    min_pot = np.min([np.min(pot_matrix) for _, pot_matrix in pot_matrices.items()])
-    max_pot = np.max([np.max(pot_matrix) for _, pot_matrix in pot_matrices.items()])
-    min_dep = np.min([np.min(dep_matrix) for _, dep_matrix in dep_matrices.items()])
-    max_dep = np.max([np.max(dep_matrix) for _, dep_matrix in dep_matrices.items()])
+    min_pot = np.min([np.nanmin(pot_matrix) for _, pot_matrix in pot_matrices.items()])
+    max_pot = np.max([np.nanmax(pot_matrix) for _, pot_matrix in pot_matrices.items()])
+    min_dep = np.min([np.nanmin(dep_matrix) for _, dep_matrix in dep_matrices.items()])
+    max_dep = np.max([np.nanmax(dep_matrix) for _, dep_matrix in dep_matrices.items()])
 
     fig = plt.figure(figsize=(20, 8))
     gs = gridspec.GridSpec(3, n+1, width_ratios=[10 for i in range(n)] + [1])
     for i, assembly_label in enumerate(assembly_labels):
         ax = fig.add_subplot(gs[0, i])
-        n_syns = np.sum(sizes[assembly_label])
-        ax.pie(sizes[assembly_label], labels=["%.2f%%" % ratio for ratio in (100 * sizes[assembly_label] / n_syns)],
-               colors=[RED, "lightgray", BLUE])
-        ax.set_title("assembly %i\n(n = %i syns\nfrom 10 neurons)" % (assembly_label, n_syns))
+        ax.pie(probs[assembly_label], labels=["%.3f" % prob for prob in probs[assembly_label]],
+               colors=[RED, "lightgray", BLUE], normalize=True)
+        ax.set_title("assembly %i" % assembly_label)
         ax2 = fig.add_subplot(gs[1, i])
-        i_pot = ax2.imshow(pot_matrices[assembly_label], cmap="Reds", aspect="auto", vmin=min_pot, vmax=max_pot)
+        i_pot = ax2.imshow(pot_matrices[assembly_label], cmap=pot_cmap, aspect="auto", vmin=min_pot, vmax=max_pot)
         ax3 = fig.add_subplot(gs[2, i])
-        i_dep = ax3.imshow(dep_matrices[assembly_label], cmap="Blues", aspect="auto", vmin=min_dep, vmax=max_dep)
+        i_dep = ax3.imshow(dep_matrices[assembly_label], cmap=dep_cmap, aspect="auto", vmin=min_dep, vmax=max_dep)
         if i == 0:
             ax2.set_yticks([0, 1])
             ax2.set_yticklabels(["assembly", "non-assembly"])
             ax3.set_yticks([0, 1])
-            ax3.set_yticklabels(["from assembly", "non assembly"])
+            ax3.set_yticklabels(["assembly", "non assembly"])
         else:
             ax2.set_yticks([])
             ax3.set_yticks([])
         ax2.set_xticks([])
         ax3.set_xticks([0, 1])
         ax3.set_xticklabels(["clustered", "not clustered"], rotation=45)
-    fig.colorbar(i_pot, cax=fig.add_subplot(gs[1, i+1]), label="Potentiated")
-    fig.colorbar(i_dep, cax=fig.add_subplot(gs[2, i+1]), label="Depressed")
+    fig.colorbar(i_pot, cax=fig.add_subplot(gs[1, i+1]), label="P(pot|cond) - P(pot) /\n P(pot|cond) + P(pot)")
+    fig.colorbar(i_dep, cax=fig.add_subplot(gs[2, i+1]), label="P(dep|cond) - P(pot) /\n P(dep|cond) + P(pot)")
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight", transparent=True)
     plt.close(fig)
@@ -104,9 +134,12 @@ def main(project_name):
     for seed, sim_path in sim_paths.iteritems():
         syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path)
         diffs = utils.get_synapse_changes(sim_path, report_name, gids)
-        sizes, pot_matrices, dep_matrices = group_diffs(syn_clusters, diffs)
+        probs = get_change_probs(syn_clusters, diffs)
+        grouped_diffs = group_diffs(syn_clusters, diffs)
+
+        pot_contrasts, dep_contrast = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
-        plot_grouped_diffs(sizes, pot_matrices, dep_matrices, fig_name)
+        plot_grouped_diffs(probs, _clip_matrices(pot_contrasts), _clip_matrices(dep_contrast), fig_name)
 
 
 if __name__ == "__main__":
