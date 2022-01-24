@@ -164,10 +164,9 @@ def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=No
 def reindex_report(data, mapping_df):
     """Re-indexes synapse report from (Neurodamus style) post_gid & local_syn_idx MultiIndex
     to (bluepy style) single global_syn_idx"""
-    # sort report columns to have the same ordering as the mapping df
-    data.sort_index(axis=1, inplace=True)
+    data.sort_index(axis=1, inplace=True)  # sort report columns to have the same ordering as the mapping df
+    data.columns = mapping_df.index
     data = data.transpose(copy=False)
-    data.index = mapping_df.index
     return data
 
 
