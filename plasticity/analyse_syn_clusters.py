@@ -4,13 +4,13 @@ author: András Ecker, last update: 01.2022
 """
 
 import os
-from copy import deepcopy
 import numpy as np
 import utils
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
 sns.set(style="ticks", context="notebook")
@@ -24,7 +24,7 @@ def get_change_probs(syn_clusters, diffs):
     for assembly_label, syn_cluster in syn_clusters.items():
         assembly_diffs = diffs.loc[syn_cluster.index]
         n_syns = len(assembly_diffs)
-        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0.5]), len(assembly_diffs[assembly_diffs < -0.5])
+        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0]), len(assembly_diffs[assembly_diffs < 0])
         assembly_probs = np.array([potentiated, 0., depressed]) / n_syns
         assembly_probs[1] = 1 - np.sum(assembly_probs)
         probs[assembly_label] = assembly_probs
@@ -61,40 +61,28 @@ def get_michelson_contrast(probs, group_diffs):
             for j, clustered in enumerate(["+", "-"]):
                 df = group_diffs[assembly_label][assembly + clustered]
                 n_syns = len(df)
-                p_pot_cond = len(df[df > 0.5]) / n_syns
+                p_pot_cond = len(df[df > 0]) / n_syns
                 pot_contrast[i, j] = (p_pot_cond - p_pot) / (p_pot_cond + p_pot)
-                p_dep_cond = len(df[df < -0.5]) / n_syns
+                p_dep_cond = len(df[df < 0]) / n_syns
                 dep_contrast[i, j] = (p_dep_cond - p_dep) / (p_dep_cond + p_dep)
         pot_contrasts[assembly_label], dep_contrasts[assembly_label] = pot_contrast, dep_contrast
     return pot_contrasts, dep_contrasts
-
-
-def _clip_matrices(matrices, min_clip=0, max_clip=None):
-    """Helper function that sets values to NaN before plotting"""
-    clipped_matrices = deepcopy(matrices)
-    for label, matrix in clipped_matrices.items():
-        if min_clip is not None:
-            matrix[matrix < min_clip] = np.nan
-        if max_clip is not None:
-            matrix[matrix > max_clip] = np.nan
-    return clipped_matrices
 
 
 def plot_grouped_diffs(probs, pot_matrices, dep_matrices, fig_name):
     """For every assembly plots pie chart with total changes in sample neurons and 2 matrices
     with the cond. prob. of potentiation and depression (in a 2x2 grid - see `group_diffs()` above)"""
     plt.rcParams["patch.edgecolor"] = "black"
-    pot_cmap = plt.get_cmap("Reds").copy()
-    pot_cmap.set_bad((0, 0, 0))
-    dep_cmap = plt.get_cmap("Blues").copy()
-    dep_cmap.set_bad((0, 0, 0))
+    neg_colors = plt.cm.Greys_r(np.linspace(0, 1, 128))
+    pot_colors = plt.cm.Reds(np.linspace(0, 1, 128))
+    dep_colors = plt.cm.Blues(np.linspace(0, 1, 128))
+    pot_cmap = LinearSegmentedColormap.from_list("pot_cmap", np.vstack((neg_colors, pot_colors)))
+    dep_cmap = LinearSegmentedColormap.from_list("pot_cmap", np.vstack((neg_colors, dep_colors)))
+    pot_extr = np.max([np.max(np.abs(pot_matrix)) for _, pot_matrix in pot_matrices.items()])
+    dep_extr = np.max([np.max(np.abs(dep_matrix)) for _, dep_matrix in dep_matrices.items()])
+
     assembly_labels = np.sort(list(probs.keys()))
     n = len(assembly_labels)
-    min_pot = np.min([np.nanmin(pot_matrix) for _, pot_matrix in pot_matrices.items()])
-    max_pot = np.max([np.nanmax(pot_matrix) for _, pot_matrix in pot_matrices.items()])
-    min_dep = np.min([np.nanmin(dep_matrix) for _, dep_matrix in dep_matrices.items()])
-    max_dep = np.max([np.nanmax(dep_matrix) for _, dep_matrix in dep_matrices.items()])
-
     fig = plt.figure(figsize=(20, 8))
     gs = gridspec.GridSpec(3, n+1, width_ratios=[10 for i in range(n)] + [1])
     for i, assembly_label in enumerate(assembly_labels):
@@ -103,9 +91,9 @@ def plot_grouped_diffs(probs, pot_matrices, dep_matrices, fig_name):
                colors=[RED, "lightgray", BLUE], normalize=True)
         ax.set_title("assembly %i" % assembly_label)
         ax2 = fig.add_subplot(gs[1, i])
-        i_pot = ax2.imshow(pot_matrices[assembly_label], cmap=pot_cmap, aspect="auto", vmin=min_pot, vmax=max_pot)
+        i_pot = ax2.imshow(pot_matrices[assembly_label], cmap=pot_cmap, aspect="auto", vmin=-pot_extr, vmax=pot_extr)
         ax3 = fig.add_subplot(gs[2, i])
-        i_dep = ax3.imshow(dep_matrices[assembly_label], cmap=dep_cmap, aspect="auto", vmin=min_dep, vmax=max_dep)
+        i_dep = ax3.imshow(dep_matrices[assembly_label], cmap=dep_cmap, aspect="auto", vmin=-dep_extr, vmax=dep_extr)
         if i == 0:
             ax2.set_yticks([0, 1])
             ax2.set_yticklabels(["assembly", "non-assembly"])
@@ -139,7 +127,7 @@ def main(project_name):
 
         pot_contrasts, dep_contrast = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
-        plot_grouped_diffs(probs, _clip_matrices(pot_contrasts), _clip_matrices(dep_contrast), fig_name)
+        plot_grouped_diffs(probs, pot_contrasts, dep_contrast, fig_name)
 
 
 if __name__ == "__main__":
