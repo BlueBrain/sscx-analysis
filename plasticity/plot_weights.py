@@ -4,6 +4,7 @@ author: András Ecker, last update: 01.2022
 """
 
 import os
+from tqdm import tqdm
 from copy import deepcopy
 import numpy as np
 import utils
@@ -12,6 +13,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import seaborn as sns
 
@@ -21,12 +23,13 @@ RED, BLUE = "#e32b14", "#3271b8"
 
 
 def plot_gmax_dists(gmax, fig_name):
-    """Plots gmax distribution over time"""
+    """Plots gmax distribution (on log scale) over time"""
     n_tbins = gmax.shape[0]
-    gmax_range = [np.min(gmax), np.percentile(gmax, 95)]
+    gmax_range = [0.1, 5]  # [np.percentile(gmax, 1), np.max(gmax)]
+    log_bins = np.logspace(np.log10(gmax_range[0]), np.log10(gmax_range[1]), 30)
     gmax_means = np.mean(gmax, axis=1)
     min_mean, max_mean = np.min(gmax_means), np.max(gmax_means)
-    cmap = plt.get_cmap("Reds")
+    cmap = LinearSegmentedColormap.from_list("cmap", plt.cm.Greys(np.linspace(0.2, 0.8, 256)))
     cmap_idx = (gmax_means - min_mean) / (max_mean - min_mean)  # get them to [0, 1] for cmap
 
     fig = plt.figure(figsize=(10, 6.5))
@@ -34,14 +37,16 @@ def plot_gmax_dists(gmax, fig_name):
     for i in range(n_tbins):
         ax = fig.add_subplot(gs[i, 0])
         color = cmap(cmap_idx[i])
-        ax.hist(gmax[i, :], bins=30, range=gmax_range, color=color, edgecolor=color)
+        ax.hist(gmax[i, :], bins=log_bins, color=color, edgecolor=color)
+        ax.set_xscale("log")
         ax.set_xlim(gmax_range)
         ax.set_yticks([])
         if i == n_tbins - 1:
             ax.set_xlabel("gmax_AMPA (nS)")
-            sns.despine(ax=ax, left=True, trim=True, offset=2)
+            sns.despine(ax=ax, left=True, offset=2)
         else:
             ax.set_xticks([])
+            ax.minorticks_off()
             sns.despine(ax=ax, left=True, bottom=True)
         ax.patch.set_alpha(0)
     gs.update(hspace=-0.2)
@@ -264,7 +269,7 @@ def main(project_name):
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
-    for idx, sim_path in sim_paths.iteritems():
+    for idx, sim_path in tqdm(sim_paths.iteritems()):
         report_name = "gmax_AMPA"
         data, diffs = get_total_change_by(sim_path, report_name, return_data=True)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_pies.png" % utils.midx2str(idx, level_names))
@@ -273,7 +278,7 @@ def main(project_name):
         plot_gmax_change_hist(data.to_numpy(), fig_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_hists.png" % utils.midx2str(idx, level_names))
         plot_gmax_dists(data.to_numpy(), fig_name)
-        
+
         report_name = "rho"
         h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
         bins, t, hist_data = utils.get_synapse_report_hist(h5f_name)
@@ -294,5 +299,5 @@ def main(project_name):
 
 
 if __name__ == "__main__":
-    project_name = "LayerWiseEShotNoise_PyramidPatterns_long"
+    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
     main(project_name)
