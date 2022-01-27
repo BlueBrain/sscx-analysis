@@ -188,6 +188,15 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     plt.close(fig)
 
 
+def print_user_target_blocks(gids):
+    """Print extra user.target blocks for detailed reporting of `gids` (that can be copy pasted)"""
+    user_target_blocks = "\nTarget Cell DetailedReport\n{\n"
+    for gid in gids:
+        user_target_blocks += "a%i " % gid
+    user_target_blocks += "\n}\n\nTarget Compartment Compartments_DetailedReport\n{\nDetailedReport\n}\n"
+    print(user_target_blocks)
+
+
 def main(project_name):
     report_name = "rho"
     sim_paths = utils.load_sim_paths(project_name)
@@ -195,7 +204,6 @@ def main(project_name):
     assert len(level_names) == 1 and level_names[0] == "seed"
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
-    '''
     for seed, sim_path in sim_paths.iteritems():
         syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path)
         diffs = utils.get_synapse_changes(sim_path, report_name, gids)
@@ -205,10 +213,11 @@ def main(project_name):
         pot_contrasts, dep_contrast = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_grouped_diffs(probs, pot_contrasts, dep_contrast, fig_name)
-    '''
 
     for seed, sim_path in sim_paths.iteritems():
         syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path, late_assembly=True)
+        if seed == 31:  # totally hand selected...
+            print_user_target_blocks(gids)
         fracs = get_fracs(syn_clusters)
         diffs = utils.get_synapse_changes(sim_path, report_name, gids)
         probs = get_change_probs(syn_clusters, diffs)
