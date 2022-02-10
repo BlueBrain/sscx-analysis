@@ -105,7 +105,7 @@ def main():
     plot_all_voltages(v_spiking, v_subtreshold, l23pc_rate, t_start, t_end, fig_name)
     # calculate EPSP amplitudes for the non-spiking group and plots the voltage trace corresponding to the 10 highest
     v_subtreshold = v_subtreshold[:5000, :]  # sample because it would run forever
-    epsps = get_epsp_amplitudes(t, v_subtreshold, [2010, 2050])
+    epsps = get_epsp_amplitudes(t, v_subtreshold, [2010, 2020])
     fig_name = os.path.join(FIGS_DIR, project_name, "L23PC_subth_epsps.png")
     plot_epsps_amplitudes(epsps, fig_name)
     plot_gids, plot_vs = get_n_highest_epsp_voltages(non_spiking_l23pc_gids, v_subtreshold, epsps)

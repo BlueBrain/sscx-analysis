@@ -22,7 +22,7 @@ def plot_voltages(gids, t, voltages, fig_name):
         ax = fig.add_subplot(gs[i])
         ax.plot(t, voltages[i, :], "k-")
         ax.set_xlim([t[0], t[-1]])
-        ax.set_ylabel("a%s Vm (mV)" % gids[i])
+        ax.set_ylabel("a%s" % gids[i])
     ax.set_xlabel("Time (ms)")
     sns.despine()
     fig.tight_layout()
