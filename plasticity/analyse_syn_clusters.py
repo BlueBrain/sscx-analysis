@@ -1,6 +1,6 @@
 """
 Loads synapse clusters saved by `assemblyfire` and checks their total changes in the synapse report
-author: András Ecker, last update: 01.2022
+author: András Ecker, last update: 02.2022
 """
 
 import os
@@ -76,6 +76,27 @@ def get_fracs(syn_clusters):
         assembly_fracs[-1] = len(non_assembly_syns[non_assembly_syns >= -1]) / len(non_assembly_syns)
         fracs[assembly_id] = assembly_fracs
     return fracs
+
+
+def _print_user_target_blocks(gids):
+    """Print extra user.target blocks for detailed reporting of `gids` (that can be copy pasted)"""
+    user_target_blocks = "\nTarget Cell DetailedReport\n{\n"
+    for gid in gids:
+        user_target_blocks += "a%i " % gid
+    user_target_blocks += "\n}\n\nTarget Compartment Compartments_DetailedReport\n{\nDetailedReport\n}\n"
+    print(user_target_blocks)
+
+
+def get_grouped_diffs(seed, sim_path, report_name, late_assembly=False, print_ut=False):
+    """Wrapper of other functions that together load and pre-calculate/group stuff for statistic tests and plotting"""
+    syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path, late_assembly)
+    if print_ut:
+        _print_user_target_blocks(gids)
+    diffs = utils.get_synapse_changes(sim_path, report_name, gids)
+    probs = get_change_probs(syn_clusters, diffs)
+    fracs = get_fracs(syn_clusters)
+    grouped_diffs = group_diffs(syn_clusters, diffs)
+    return probs, fracs, grouped_diffs
 
 
 def get_michelson_contrast(probs, grouped_diffs):
@@ -188,15 +209,6 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     plt.close(fig)
 
 
-def print_user_target_blocks(gids):
-    """Print extra user.target blocks for detailed reporting of `gids` (that can be copy pasted)"""
-    user_target_blocks = "\nTarget Cell DetailedReport\n{\n"
-    for gid in gids:
-        user_target_blocks += "a%i " % gid
-    user_target_blocks += "\n}\n\nTarget Compartment Compartments_DetailedReport\n{\nDetailedReport\n}\n"
-    print(user_target_blocks)
-
-
 def main(project_name):
     report_name = "rho"
     sim_paths = utils.load_sim_paths(project_name)
@@ -205,29 +217,20 @@ def main(project_name):
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
     for seed, sim_path in sim_paths.iteritems():
-        syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path)
-        diffs = utils.get_synapse_changes(sim_path, report_name, gids)
-        probs = get_change_probs(syn_clusters, diffs)
-        grouped_diffs = group_diffs(syn_clusters, diffs)
-
-        pot_contrasts, dep_contrast = get_michelson_contrast(probs, grouped_diffs)
+        probs, _, grouped_diffs = get_grouped_diffs(seed, sim_path, report_name)
+        pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
-        plot_2x2_grouped_diffs(probs, pot_contrasts, dep_contrast, fig_name)
+        plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
 
     for seed, sim_path in sim_paths.iteritems():
-        syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path, late_assembly=True)
-        if seed == 31:  # totally hand selected...
-            print_user_target_blocks(gids)
-        fracs = get_fracs(syn_clusters)
-        diffs = utils.get_synapse_changes(sim_path, report_name, gids)
-        probs = get_change_probs(syn_clusters, diffs)
-        grouped_diffs = group_diffs(syn_clusters, diffs)
-
-        pot_contrasts, dep_contrast = get_michelson_contrast(probs, grouped_diffs)
+        print_ut = True if seed == 31 else False  # seed 31 is totally hand selected...
+        probs, fracs, grouped_diffs = get_grouped_diffs(seed, sim_path, report_name,
+                                                        late_assembly=True, print_ut=print_ut)
+        pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_syn_clust_plast_seed%i.png" % seed)
         # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
         # and as the rest of the functions create dicts, one has to select it by the `0` key here...
-        plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrast[0], fig_name)
+        plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
 
 
 if __name__ == "__main__":
