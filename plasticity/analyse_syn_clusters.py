@@ -4,7 +4,9 @@ author: András Ecker, last update: 02.2022
 """
 
 import os
+from copy import deepcopy
 import numpy as np
+import pandas as pd
 import utils
 import matplotlib
 matplotlib.use("Agg")
@@ -122,6 +124,17 @@ def get_michelson_contrast(probs, grouped_diffs):
     return pot_contrasts, dep_contrasts
 
 
+def assembly_syn_cluster_diffs2df(grouped_diffs):
+    """Creates a DataFrame from assembly synapse cluster diffs (easier to plot and merge with extra morph. features)"""
+    pre_assembly_idx = _sort_keys(list(grouped_diffs.keys()))[:-1]  # don't use non-assembly synapses
+    dfs = []
+    for pre_assembly_id in pre_assembly_idx:
+        df = grouped_diffs[pre_assembly_id][1].to_frame()  # [1]: clustered synapses
+        df["pre_assembly"] = pre_assembly_id
+        dfs.append(df)
+    return pd.concat(dfs).sort_index()
+
+
 def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
     """For every assembly plots pie chart with total changes in sample neurons and 2 matrices
     with the cond. prob. of potentiation and depression (in a 2x2 grid)"""
@@ -209,6 +222,26 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     plt.close(fig)
 
 
+def plot_morph_features(df, fig_name):
+    """Plot morphological features (detailed scatter plot)"""
+    df.loc[df["loc"].isin(["oblique", "trunk", "tuft"]), "loc"] = "apical"
+    cmap = plt.cm.get_cmap("tab20", df["pre_assembly"].max() + 1)
+    palette = {i: cmap(i) for i in df["pre_assembly"].unique()}
+    fig = plt.figure(figsize=(7, 11))
+    ax = fig.add_subplot(1, 1, 1)
+    sns.scatterplot(data=df, x="diam", y="dist", hue="pre_assembly", hue_order=np.sort(list(palette.keys())),
+                    palette=palette, style="loc", edgecolor="none", ax=ax)  # size="br_ord"
+    # ax.set_xlim([df["diam"].min(), df["diam"].max()])
+    # ax.set_ylim([df["dist"].min(), df["dist"].max()])
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
+    sns.despine(offset=2, trim=True)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main(project_name):
     report_name = "rho"
     sim_paths = utils.load_sim_paths(project_name)
@@ -222,6 +255,7 @@ def main(project_name):
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
 
+    morph_df = utils.load_extra_morph_features(["loc", "dist", "diam", "br_ord"])
     for seed, sim_path in sim_paths.iteritems():
         print_ut = True if seed == 31 else False  # seed 31 is totally hand selected...
         probs, fracs, grouped_diffs = get_grouped_diffs(seed, sim_path, report_name,
@@ -231,6 +265,10 @@ def main(project_name):
         # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
         # and as the rest of the functions create dicts, one has to select it by the `0` key here...
         plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
+        df = assembly_syn_cluster_diffs2df(deepcopy(grouped_diffs[0]))
+        df = pd.concat([df, morph_df.loc[df.index]], axis=1)
+        # fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_syn_clust_morph_seed%i.png" % seed)
+        # plot_morph_features(df, fig_name)
 
 
 if __name__ == "__main__":
