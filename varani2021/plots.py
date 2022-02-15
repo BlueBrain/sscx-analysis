@@ -143,14 +143,14 @@ def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     i2 = ax2.imshow(v_spiking, cmap="inferno", aspect="auto", origin="lower")
     plt.colorbar(i2, cax=fig.add_subplot(gs[1, 1]))
     ax2.set_ylabel("Spiking gids")
-    ax2.set_xticks(np.linspace(0, v_spiking.shape[1], 6).astype(int))
+    ax2.set_xticks(np.linspace(-0.5, v_spiking.shape[1]-0.5, 6))
     ax2.set_xticklabels(xticks)
     ax3 = fig.add_subplot(gs[2, 0])
     i3 = ax3.imshow(v_subtreshold, cmap="inferno", aspect="auto", origin="lower")
     cbar = plt.colorbar(i3, cax=fig.add_subplot(gs[2, 1]))
     cbar.set_label("Voltage (mV)")
     ax3.set_ylabel("Non-spiking gids (%.1f%%)" % non_spiking_pct)
-    ax3.set_xticks(np.linspace(0, v_subtreshold.shape[1], 6).astype(int))
+    ax3.set_xticks(np.linspace(-0.5, v_subtreshold.shape[1]-0.5, 6))
     ax3.set_xticklabels(xticks)
     ax4 = fig.add_subplot(gs[3, 0])
     ax4.plot(t_v, v_subtreshold_mean, "k-")
@@ -168,11 +168,11 @@ def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     
 def plot_epsps_amplitudes(epsps, fig_name):
     """Plots EPSP amplitudes of non-spiking cells"""
-    range = [np.min(epsps), np.max(epsps)]
+    range = [0, np.max(epsps)]
     fig = plt.figure(figsize=(10, 6.5))
     ax = fig.add_subplot(1, 1, 1)
     ax.hist(epsps, bins=30, range=range, color="gray")
-    ax.set_xlim([0, range[1]])
+    ax.set_xlim(range)
     ax.set_xlabel("EPSP amplitude (mV)")
     sns.despine(offset=5, trim=True)
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)

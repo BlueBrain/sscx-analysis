@@ -29,7 +29,7 @@ def get_tc_rates(sim, t_start, t_end):
 
 
 if __name__ == "__main__":
-    project_name = "6dd5e1b3-234b-4639-a08b-22bf066bb5b1"
+    project_name = "84f11a52-5b9d-42a3-9765-cedece9771a4"
     t_start = 1500
 
     sim_paths = utils.load_sim_paths(project_name)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
         t_end = sim.t_end
-        spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
+        spike_times, spiking_gids = utils.get_spikes(sim, None, t_start, t_end)
         proj_rate_dict = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
         plot_raster(spike_times, spiking_gids, proj_rate_dict, raster_asthetics, t_start, t_end, fig_name)

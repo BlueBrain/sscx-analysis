@@ -9,9 +9,8 @@ import pickle
 import numpy as np
 import pandas as pd
 
-
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/scratch/home/ecker/simulations"
-
+SPIKE_TH = -30  # -30 mV is NEURON's built in spike threshold
 
 def ensure_dir(dir_path):
     if not os.path.exists(dir_path):
@@ -55,10 +54,13 @@ def midx2str(midx, level_names):
         raise RuntimeError("Incorrect level_names passed")
 
 
-def get_spikes(sim, t_start, t_end):
+def get_spikes(sim, gids, t_start, t_end):
     """Extracts spikes with bluepy"""
-    spikes = sim.spikes.get(t_start=t_start, t_end=t_end)
-    return spikes.index.to_numpy(), spikes.values
+    if gids is not None:
+        spikes = sim.spikes.get(gids=gids, t_start=t_start, t_end=t_end)
+    else:
+        spikes = sim.spikes.get(t_start=t_start, t_end=t_end)
+    return spikes.index.to_numpy(), spikes.to_numpy()
 
 
 def calc_rate(spike_times, N, t_start, t_end, bin_size=10):
@@ -89,6 +91,33 @@ def load_tc_gids(project_name):
             if f_name[-4:] == ".txt" and "POM" in f_name:
                 pom_gids = np.loadtxt(os.path.join(proj_dir, f_name))[:, 0].astype(int)
     return vpm_gids, pom_gids
+
+
+def _clean_voltages(gids, voltages, spiking):
+    """Removes non-spiking voltage traces if spiking is True or the spiking ones if it's False
+    (currently we detect spikes at the AIS and report the voltage of the soma...)
+    and reorders the remaining ones based on the mean value for better plotting"""
+    max_v = np.max(voltages, axis=0)
+    idx = np.where(max_v >= SPIKE_TH)[0] if spiking else np.where(max_v < SPIKE_TH)[0]
+    voltages = voltages[:, idx]
+    gids = gids[idx]
+    sort_idx = np.argsort(np.mean(voltages, axis=0))
+    return gids[sort_idx], voltages[:, sort_idx]
+
+
+def get_voltages(sim, gids, t_start, t_end, spiking):
+    """Extracts reported soma voltages with bluepy and cleanes them (see `_clean_voltages()` above)"""
+    report = sim.report("soma")
+    if gids is not None:
+        # data = report.get(gids=gids, t_start=t_start, t_end=t_end)
+        data = report.get(t_start=t_start, t_end=t_end)
+        data = data[gids]
+    else:
+        data = report.get(t_start=t_start, t_end=t_end)
+    t = data.index.to_numpy()
+    voltages = data.to_numpy()
+    gids, voltages =  _clean_voltages(gids, voltages, spiking)
+    return gids, t, voltages.T
 
 
 
