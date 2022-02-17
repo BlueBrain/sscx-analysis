@@ -301,6 +301,83 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     plt.close(fig)
 
 
+def plot_assembly_diffs(df, fig_name):
+    """Box plot and significance test of assembly synapse cluster on assembly neurons"""
+    df.loc[:, "assembly"] = df["assembly"].astype(str)  # `statannotation` wants strings...
+    order = np.sort(df["assembly"].unique())
+    df.loc[:, "pre_assembly"] = df["pre_assembly"].astype(str).replace({"-1": "not assembly"})
+    df.loc[:, "pre_assembly"] = df["pre_assembly"].replace({i: "assembly" for i in order})
+    df.loc[:, "clustered"] = df["clustered"].replace({True: "clustered", False: "not clustered"})
+    hue_order_assembly = ["assembly", "not assembly"]
+    dep_palette_assembly = {"assembly": BLUE, "not assembly": "lightgray"}
+    pot_palette_assembly = {"assembly": RED, "not assembly": "lightgray"}
+    pairs_assembly = [((i, "assembly"), (i, "not assembly")) for i in order]
+    hue_order_cluster = ["clustered", "not clustered"]
+    dep_palette_cluster = {"clustered": BLUE, "not clustered": "gray"}
+    pot_palette_cluster = {"clustered": RED, "not clustered": "gray"}
+    pairs_cluster = [((i, "clustered"), (i, "not clustered")) for i in order]
+
+    fig = plt.figure(figsize=(20, 10))
+    data = df.loc[df["delta_rho"] < 0]
+    data.loc[:, "delta_rho"] = data["delta_rho"].abs()  # to be able to show them on the same axis
+    ax = fig.add_subplot(2, 2, 1)
+    ax.set_ylim([0, 1])
+    sns.boxplot(data=data, x="assembly", y="delta_rho", hue="pre_assembly", order=order,
+                hue_order=hue_order_assembly, fliersize=0, palette=dep_palette_assembly, ax=ax)
+    sns.stripplot(data=data, x="assembly", y="delta_rho",  hue="pre_assembly", order=order,
+                  hue_order=hue_order_assembly, dodge=True, size=3, color="black", edgecolor=None, ax=ax)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[0:2], labels[0:2], ncol=2, loc=3, bbox_to_anchor=(0, -0.2))
+    ax.set_xlabel("")
+    annotator = Annotator(ax, pairs=pairs_assembly, data=data, x="assembly", y="delta_rho",  hue="pre_assembly",
+                          order=order, hue_order=hue_order_assembly)
+    annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
+    ax3 = fig.add_subplot(2, 2, 3)
+    ax3.set_ylim([0, 1])
+    data = data.loc[data["pre_assembly"] == "assembly"]
+    sns.boxplot(data=data, x="assembly", y="delta_rho", hue="clustered", order=order, hue_order=hue_order_cluster,
+                fliersize=0, palette=dep_palette_cluster, ax=ax3)
+    sns.stripplot(data=data, x="assembly", y="delta_rho", hue="clustered", order=order, hue_order=hue_order_cluster,
+                  dodge=True, size=3, color="black", edgecolor=None, ax=ax3)
+    handles, labels = ax3.get_legend_handles_labels()
+    ax3.legend(handles[0:2], labels[0:2], ncol=2, loc=3, bbox_to_anchor=(0, -0.2))
+    annotator = Annotator(ax3, pairs=pairs_cluster, data=data, x="assembly", y="delta_rho",
+                          hue="clustered", order=order, hue_order=hue_order_cluster)
+    annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
+
+    data = df.loc[df["delta_rho"] > 0]
+    ax2 = fig.add_subplot(2, 2, 2)
+    ax2.set_ylim([0, 1])
+    sns.boxplot(data=data, x="assembly", y="delta_rho", hue="pre_assembly", order=order,
+                hue_order=hue_order_assembly, fliersize=0, palette=pot_palette_assembly, ax=ax2)
+    sns.stripplot(data=data, x="assembly", y="delta_rho", hue="pre_assembly", order=order,
+                  hue_order=hue_order_assembly, dodge=True, size=3, color="black", edgecolor=None, ax=ax2)
+    handles, labels = ax2.get_legend_handles_labels()
+    ax2.legend(handles[0:2], labels[0:2], ncol=2, loc=3, bbox_to_anchor=(0, -0.2))
+    ax2.set_xlabel("")
+    ax2.set_ylabel("")
+    annotator = Annotator(ax2, pairs=pairs_assembly, data=data, x="assembly", y="delta_rho",
+                          hue="pre_assembly", order=order, hue_order=hue_order_assembly)
+    annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
+    ax4 = fig.add_subplot(2, 2, 4)
+    ax4.set_ylim([0, 1])
+    data = data.loc[data["pre_assembly"] == "assembly"]
+    sns.boxplot(data=data, x="assembly", y="delta_rho", hue="clustered", order=order, hue_order=hue_order_cluster,
+                fliersize=0, palette=pot_palette_cluster, ax=ax4)
+    sns.stripplot(data=data, x="assembly", y="delta_rho", hue="clustered", order=order, hue_order=hue_order_cluster,
+                  dodge=True, size=3, color="black", edgecolor=None, ax=ax4)
+    handles, labels = ax4.get_legend_handles_labels()
+    ax4.legend(handles[0:2], labels[0:2], ncol=2, loc=3, bbox_to_anchor=(0, -0.2))
+    ax4.set_ylabel("")
+    annotator = Annotator(ax4, pairs=pairs_cluster, data=data, x="assembly", y="delta_rho",
+                          hue="clustered", order=order, hue_order=hue_order_cluster)
+    annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
+    sns.despine(bottom=True)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
+
 def plot_late_assembly_diffs(df, fig_name):
     """Box plot and significance test of assembly synapse cluster on late assembly neurons"""
     df.loc[:, "pre_assembly"] = df["pre_assembly"].astype(str)  # `statannotation` wants strings...
