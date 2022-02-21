@@ -135,7 +135,7 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     plt.plot(np.full(2, np.nanmean(peak_ratio)), plt.ylim(), '-', color='tab:green', linewidth=3)
     plt.text(np.nanmean(peak_ratio), 0.99 * max(plt.ylim()), f'  Mean: {np.nanmean(peak_ratio):.3f}', color='tab:green', ha='left', va='top')
     plt.grid()
-    plt.xlabel('Norm. peak ratio')
+    plt.xlabel('Norm. peak difference')
     plt.ylabel('Count')
     plt.title('First vs. second peak ratio')
 
