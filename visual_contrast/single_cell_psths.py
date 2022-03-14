@@ -54,7 +54,7 @@ def get_single_cell_psths(blue_config, target_spec, psth_interval=None, t_res=20
     stim_train = stim_cfg['props']['stim_train']
     num_patterns = max(stim_train) + 1
     stim_int = [[t, t + stim_cfg['cfg']['duration_stim']] for t in np.array(time_windows[:-1])]
-    if opto_cfg is None or opto_cfg.get('props') is None or opto_cfg['props'].get('opto_t') is None or opto_cfg['props'].get('opto_dur'):
+    if opto_cfg is None or opto_cfg.get('props') is None or opto_cfg['props'].get('opto_t') is None or opto_cfg['props'].get('opto_dur') is None:
         stim_opto_overlap = np.zeros(len(stim_int))
     else:
         opto_int = [[opto_cfg['props']['opto_t'][i], opto_cfg['props']['opto_t'][i] + opto_cfg['props']['opto_dur'][i]] for i in range(len(opto_cfg['props']['opto_t']))]
