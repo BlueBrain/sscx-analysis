@@ -478,3 +478,18 @@ def plot_late_assembly_diffs(df, fig_name):
     fig.tight_layout()
     fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
     plt.close(fig)
+
+
+def plot_bglibpy_trace(t, v, t_nd, v_nd, fig_name):
+    """Plots soma voltage traces from original (Neurodamus) and BGLibPy sims"""
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(t, v, 'r-', label="BGLibPy")
+    ax.plot(t_nd, v_nd, 'k-', label="Neurodamus")
+    ax.legend(frameon=False)
+    ax.set_xlim([t[0], t[-1]])
+    ax.set_xlabel("Time (ms)")
+    ax.set_ylabel("V (mV)")
+    sns.despine(offset=2)
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
