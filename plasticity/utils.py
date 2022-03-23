@@ -12,6 +12,7 @@ import pandas as pd
 import numba
 import multiprocessing as mp
 from libsonata import ElementReportReader
+from bluepy.impl.spike_report import SpikeReport
 
 
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
@@ -88,7 +89,7 @@ def get_tc_spikes(sim, t_start, t_end):
 def load_tc_gids(project_name):
     """Loads in VPM and POM gids from saved files"""
     vpm_gids, pom_gids = None, None
-    proj_dir = os.path.join(project_name, "projections")
+    proj_dir = os.path.join(SIMS_DIR, project_name, "projections")
     if os.path.isdir(proj_dir):
         for f_name in os.listdir(proj_dir):
             if f_name[-4:] == ".txt" and "VPM" in f_name:
@@ -96,6 +97,35 @@ def load_tc_gids(project_name):
             if f_name[-4:] == ".txt" and "POM" in f_name:
                 pom_gids = np.loadtxt(os.path.join(proj_dir, f_name))[:, 0].astype(int)
     return vpm_gids, pom_gids
+
+
+# copy-pasted from bglibpy/ssim.py (util BGLibPy will support adding spikes from SpikeFile!)
+def _parse_outdat(f_name):
+    """Parse the replay spiketrains in a out.dat formatted file"""
+    spikes = SpikeReport.load(f_name).get()
+    # convert Series to DataFrame with 2 columns for `groupby` operation
+    spike_df = spikes.to_frame().reset_index()
+    if (spike_df["t"] < 0).any():
+        warnings.warn("Found negative spike times... Clipping them to 0")
+        spike_df["t"].clip(lower=0., inplace=True)
+    outdat = spike_df.groupby("gid")["t"].apply(np.array)
+    return outdat.to_dict()
+
+
+def get_stim_spikes(bc_object):
+    """Loads in input spikes (on projections) using the bluepy.Simulation.config object"""
+    f_name = None
+    stims = bc_object.typed_sections("Stimulus")
+    for stim in stims:
+        if hasattr(stim, "SpikeFile"):
+            f_name = stim.SpikeFile
+            break  # atm. it handles only a single (the first in order) SpikeFile... TODO: extend this
+    if f_name is not None:
+        f_name = f_name if os.path.isabs(f_name) else os.path.join(bc_object.Run["CurrentDir"], f_name)
+        return _parse_outdat(f_name)
+    else:
+        warnings.warn("No SpikeFile found in the BlueConfig, returning empty dict")
+        return {}
 
 
 def load_patterns(project_name, seed=None):
