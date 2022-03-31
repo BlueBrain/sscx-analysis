@@ -58,18 +58,34 @@ def setup_raster(spike_times, spiking_gids, ys, colors, groups, types, type_colo
 
 
 def get_tc_rates(sim, t_start, t_end):
-    """Read VPM and POm spikes from spike replay file"""
+    """Read VPM and POm spikes from SpikeFile"""
     spike_times, spiking_gids = utils.get_tc_spikes(sim, t_start, t_end)
     vpm_gids, pom_gids = utils.load_tc_gids(os.path.split(sim.config.Run_Default.CurrentDir)[0])
-    proj_rate_dict = {}
+    proj_spikes, proj_rates = {}, {}
     for proj_name, proj_gids in zip(["VPM", "POm"], [vpm_gids, pom_gids]):
         if proj_gids is not None:
             mask = np.isin(spiking_gids, proj_gids)
             if mask.sum() > 0:
-                proj_spike_times, proj_spiking_gids = spike_times[mask], spiking_gids[mask]
-                proj_rate_dict[proj_name] = utils.calc_rate(proj_spike_times, len(np.unique(proj_spiking_gids)),
+                proj_spikes[proj_name] = {"spike_times": spike_times[mask], "spiking_gids": spiking_gids[mask]}
+                proj_rates[proj_name] = utils.calc_rate(spike_times[mask], len(np.unique(spiking_gids[mask])),
                                                             t_start, t_end)
-    return proj_rate_dict if len(proj_rate_dict) else None
+    if len(proj_rates):
+        return proj_spikes, proj_rates
+    else:
+        return None, None
+
+
+def get_pattern_rates(pattern_gids, spike_times, spiking_gids, t_start, t_end):
+    """Gets VPM spikes by pattern"""
+    pattern_spikes, pattern_sc_rates, pattern_rates = {}, {}, {}
+    for name, gids in pattern_gids.items():
+        mask = np.isin(spiking_gids, gids)
+        if mask.sum() > 0:
+            pattern_spikes[name] = {"spike_times": spike_times[mask], "spiking_gids": spiking_gids[mask]}
+            pattern_sc_rates[name] = utils.calc_sc_rate(spiking_gids[mask], t_start, t_end)
+            pattern_rates[name] =  utils.calc_rate(spike_times[mask], len(np.unique(spiking_gids[mask])), t_start, t_end)
+    return pattern_spikes, pattern_sc_rates, pattern_rates
+
 
 
 def plot_raster(spike_times, spiking_gids, proj_rate_dict, asthetics, t_start, t_end, fig_name):
@@ -161,34 +177,92 @@ def plot_patterns(pattern_gids, all_gids, pos, patterns_dir):
     plt.close(fig)
 
 
+def _normalize_gids(spiking_gids):
+    """Normalize TC gids for better plotting (works the same way as `setup_raster()` does)"""
+    unique_gids, idx = np.unique(spiking_gids, return_inverse=True)
+    shifted_gids = np.arange(0, len(unique_gids))
+    return shifted_gids[idx]
+
+
+def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start, t_end, fig_name):
+    """Plot VPM spikes and rates grouped by individual patterns"""
+    fig = plt.figure(figsize=(10, 12))
+    gs = gridspec.GridSpec(len(pattern_spikes), 2, width_ratios=[9, 1])
+    pattern_names = np.sort(list(pattern_gids.keys()))
+    t_rate = np.linspace(t_start, t_end, len(pattern_rates[pattern_names[0]]))
+    max_sc_rate = np.max([np.max(rate) for _, rate in pattern_sc_rates.items()])
+    max_rate = np.max([np.max(rate) for _, rate in pattern_rates.items()])
+
+    for i, name in enumerate(pattern_names):
+        color = PATTERN_COLORS[name]
+        ax = fig.add_subplot(gs[i, 0])
+        spiking_gids = _normalize_gids(pattern_spikes[name]["spiking_gids"])
+        ax.scatter(pattern_spikes[name]["spike_times"], spiking_gids, color=color, marker='.', s=10., edgecolor="none")
+        ax.set_xlim([t_start, t_end])
+        ax.set_yticks([0, np.max(spiking_gids)])
+        ax.set_ylabel(name)
+        ax2 = ax.twinx()
+        ax2.plot(t_rate, pattern_rates[name], color=color)
+        ax2.fill_between(t_rate, np.zeros_like(t_rate),  pattern_rates[name], color=color, alpha=0.1)
+        ax2.set_ylim([0, max_rate])
+        # ax2.set_ylabel("Rate (Hz)")
+        ax3 = fig.add_subplot(gs[i, 1])
+        ax3.hist(pattern_sc_rates[name], bins=10, range=(0, max_sc_rate), color=color)
+        ax3.set_xlim([0, max_sc_rate])
+        # ax3.set_ylabel("Count")
+        sns.despine(ax=ax3)
+        if i == len(pattern_names) - 1:
+            ax.set_xlabel("Time (ms)")
+            ax3.set_xlabel("Single cell rate (Hz)")
+        else:
+            ax.set_xticks([])
+            ax3.set_xticks([])
+    gs.tight_layout(fig, h_pad=0.2)
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
 
-    project_name = "f867472e-ec93-4648-9d5d-7b075abffef7"
-    t_start = 2500
-    plt_patterns = True
+    project_name = "bfdc245d-ff5c-413a-8054-bcf4bb8f8ab2"
+    t_start = 1500
+    plt_patterns = False
+    plt_pattern_spikes = True
 
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
     with open("raster_asth.pkl", "rb") as f:
         raster_asthetics = pickle.load(f)
+    if "stim_seed" not in level_names:
+        pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name)
+        if plt_patterns:
+            plot_patterns(pattern_gids, tc_gids, tc_pos, os.path.join(FIGS_DIR, project_name, "patterns"))
 
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
-        t_end = 12500  # sim.t_end
-        spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
-        proj_rate_dict = get_tc_rates(sim, t_start, t_end)
+        t_end = 7000  # sim.t_end
+        # spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
+        proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
-        plot_raster(spike_times, spiking_gids, proj_rate_dict, raster_asthetics, t_start, t_end, fig_name)
+        # plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
 
-    if plt_patterns:
-        if "stim_seed" not in level_names:
-            pattern_gids, gids, pos, _ = utils.load_patterns(project_name)
-            plot_patterns(pattern_gids, gids, pos, os.path.join(FIGS_DIR, project_name, "patterns"))
-        else:
-            for seed in sim_paths.index.levels[level_names == "stim_seed"].to_numpy():
-                pattern_gids, gids, pos, _ = utils.load_patterns(project_name, seed)
-                plot_patterns(pattern_gids, gids, pos, os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % seed))
+        if "stim_seed" not in level_names and plt_pattern_spikes:
+            pattern_spikes, pattern_sc_rates, pattern_rates = get_pattern_rates(pattern_gids,
+                            proj_spikes["VPM"]["spike_times"], proj_spikes["VPM"]["spiking_gids"], t_start, t_end)
+            fig_name = os.path.join(FIGS_DIR, project_name, "%spatterns.png" % utils.midx2str(idx, level_names))
+            plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start, t_end, fig_name)
+        if "stim_seed" in level_names:
+            stim_seed = idx[level_names == "stim_seed"]
+            pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name, stim_seed)
+            if plt_patterns:
+                fig_name = os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % stim_seed)
+                plot_patterns(pattern_gids, tc_gids, tc_pos, fig_name)
+            if plt_pattern_spikes:
+                pattern_spikes, pattern_sc_rates, pattern_rates = get_pattern_rates(pattern_gids,
+                                proj_spikes["VPM"]["spike_times"], proj_spikes["VPM"]["spiking_gids"], t_start, t_end)
+                fig_name = os.path.join(FIGS_DIR, project_name, "%spatterns.png" % utils.midx2str(idx, level_names))
+                plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start, t_end, fig_name)
 
 
 

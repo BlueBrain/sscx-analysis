@@ -76,14 +76,11 @@ def calc_rate(spike_times, N, t_start, t_end, bin_size=10):
     return rate / (N*1e-3*bin_size)  # *1e-3 ms to s conversion
 
 
-def get_tc_spikes(sim, t_start, t_end):
-    """Extracts spikes from BC stimulus block 'spikeReplay'"""
-    spikef_name = sim.config.Stimulus_spikeReplay.SpikeFile  # TODO: add some error handling...
-    f_name = spikef_name if os.path.isabs(spikef_name) else os.path.join(sim.config.Run_Default.CurrentDir, spikef_name)
-    tmp = np.loadtxt(f_name, skiprows=1)
-    spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)
-    idx = np.where((t_start < spike_times) & (spike_times < t_end))[0]
-    return spike_times[idx], spiking_gids[idx]
+def calc_sc_rate(spiking_gids, t_start, t_end):
+    """Calculates single cell firing rates"""
+    _, counts = np.unique(spiking_gids, return_counts=True)
+    t = (t_end - t_start) * 1e-3  # *1e-3 ms to s conversion
+    return counts / t
 
 
 def load_tc_gids(project_name):
@@ -99,7 +96,20 @@ def load_tc_gids(project_name):
     return vpm_gids, pom_gids
 
 
-# copy-pasted from bglibpy/ssim.py (util BGLibPy will support adding spikes from SpikeFile!)
+def _get_spikef_name(config):
+    """Gets the name of the SpikeFile from bluepy.Simulation.config object"""
+    f_name = None
+    stims = config.typed_sections("Stimulus")
+    for stim in stims:
+        if hasattr(stim, "SpikeFile"):
+            f_name = stim.SpikeFile
+            break  # atm. it handles only a single (the first in order) SpikeFile... TODO: extend this
+    if f_name is not None:
+        f_name = f_name if os.path.isabs(f_name) else os.path.join(config.Run["CurrentDir"], f_name)
+    return f_name
+
+
+# copy-pasted from bglibpy/ssim.py (until BGLibPy will support adding spikes from SpikeFile!)
 def _parse_outdat(f_name):
     """Parse the replay spiketrains in a out.dat formatted file"""
     spikes = SpikeReport.load(f_name).get()
@@ -112,20 +122,29 @@ def _parse_outdat(f_name):
     return outdat.to_dict()
 
 
-def get_stim_spikes(bc_object):
-    """Loads in input spikes (on projections) using the bluepy.Simulation.config object"""
-    f_name = None
-    stims = bc_object.typed_sections("Stimulus")
-    for stim in stims:
-        if hasattr(stim, "SpikeFile"):
-            f_name = stim.SpikeFile
-            break  # atm. it handles only a single (the first in order) SpikeFile... TODO: extend this
+def get_stim_spikes(config):
+    """Loads in input spikes (on projections) using the bluepy.Simulation.config object.
+    Returns the format expected by BGLibPy's `pre_spike_trains` for replay"""
+    f_name = _get_spikef_name(config)
     if f_name is not None:
-        f_name = f_name if os.path.isabs(f_name) else os.path.join(bc_object.Run["CurrentDir"], f_name)
         return _parse_outdat(f_name)
     else:
-        warnings.warn("No SpikeFile found in the BlueConfig, returning empty dict")
+        warnings.warn("No SpikeFile found in the BlueConfig, returning empty dict.")
         return {}
+
+
+def get_tc_spikes(sim, t_start, t_end):
+    """Loads in input spikes (on projections) using the bluepy.Simulation.config object.
+    Returns the format used for plotting rasters and population rates"""
+    f_name = _get_spikef_name(sim.config)
+    if f_name is not None:
+        tmp = np.loadtxt(f_name, skiprows=1)
+        spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)
+        idx = np.where((t_start < spike_times) & (spike_times < t_end))[0]
+        return spike_times[idx], spiking_gids[idx]
+    else:
+        warnings.warn("No SpikeFile found in the BlueConfig, returning empty arrays.")
+        return np.array([]), np.array([], dtype=int)
 
 
 def load_patterns(project_name, seed=None):
