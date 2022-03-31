@@ -188,7 +188,7 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
     """Plot VPM spikes and rates grouped by individual patterns"""
     fig = plt.figure(figsize=(10, 12))
     gs = gridspec.GridSpec(len(pattern_spikes), 2, width_ratios=[9, 1])
-    pattern_names = np.sort(list(pattern_gids.keys()))
+    pattern_names = np.sort(list(pattern_spikes.keys()))
     t_rate = np.linspace(t_start, t_end, len(pattern_rates[pattern_names[0]]))
     max_sc_rate = np.max([np.max(rate) for _, rate in pattern_sc_rates.items()])
     max_rate = np.max([np.max(rate) for _, rate in pattern_rates.items()])
@@ -224,7 +224,7 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 if __name__ == "__main__":
 
-    project_name = "bfdc245d-ff5c-413a-8054-bcf4bb8f8ab2"
+    project_name = "a4c8c1af-6b30-45f3-a8b1-79d289efe61f"
     t_start = 1500
     plt_patterns = False
     plt_pattern_spikes = True
@@ -242,10 +242,10 @@ if __name__ == "__main__":
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
         t_end = 7000  # sim.t_end
-        # spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
+        spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
         proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
-        # plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
+        plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
 
         if "stim_seed" not in level_names and plt_pattern_spikes:
             pattern_spikes, pattern_sc_rates, pattern_rates = get_pattern_rates(pattern_gids,
