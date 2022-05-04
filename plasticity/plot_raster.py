@@ -224,38 +224,37 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 if __name__ == "__main__":
 
-    project_name = "a4c8c1af-6b30-45f3-a8b1-79d289efe61f"
+    project_name = "1f6af9a9-29c5-4459-ab07-1932f790b32d"
     t_start = 1500
     plt_patterns = False
-    plt_pattern_spikes = True
+    plt_pattern_spikes = False
 
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
     with open("raster_asth.pkl", "rb") as f:
         raster_asthetics = pickle.load(f)
-    if "stim_seed" not in level_names:
+    if plt_patterns and "stim_seed" not in level_names:
         pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name)
-        if plt_patterns:
-            plot_patterns(pattern_gids, tc_gids, tc_pos, os.path.join(FIGS_DIR, project_name, "patterns"))
+        plot_patterns(pattern_gids, tc_gids, tc_pos, os.path.join(FIGS_DIR, project_name, "patterns"))
 
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
-        t_end = 7000  # sim.t_end
+        t_end = sim.t_end
         spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
         proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
         plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
 
-        if "stim_seed" not in level_names and plt_pattern_spikes:
+        if plt_pattern_spikes and "stim_seed" not in level_names:
             pattern_spikes, pattern_sc_rates, pattern_rates = get_pattern_rates(pattern_gids,
                             proj_spikes["VPM"]["spike_times"], proj_spikes["VPM"]["spiking_gids"], t_start, t_end)
             fig_name = os.path.join(FIGS_DIR, project_name, "%spatterns.png" % utils.midx2str(idx, level_names))
             plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start, t_end, fig_name)
         if "stim_seed" in level_names:
-            stim_seed = idx[level_names == "stim_seed"]
-            pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name, stim_seed)
             if plt_patterns:
+                stim_seed = idx[level_names == "stim_seed"]
+                pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name, stim_seed)
                 fig_name = os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % stim_seed)
                 plot_patterns(pattern_gids, tc_gids, tc_pos, fig_name)
             if plt_pattern_spikes:
