@@ -41,17 +41,15 @@ def rerun_single_cell(bc, gid, t_stop=None, return_orig_v=False):
 
 
 def main(project_name):
-    sim_paths = utils.load_sim_paths(project_name)
-    seed = 31
+    sim_path = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations/1f6af9a9-29c5-4459-ab07-1932f790b32d/009/BlueConfig"
     gid = 3652313
-    sim_path = sim_paths.loc[31]
-    t, v, t_nd, v_nd = rerun_single_cell(sim_path, gid, t_stop=5000, return_orig_v=True)
-    fig_name = os.path.join(FIGS_DIR, project_name, "seed%i_a%i_bglibpy_trace.png" % (seed, gid))
+    t, v, t_nd, v_nd = rerun_single_cell(sim_path, gid, return_orig_v=True)
+    fig_name = os.path.join(FIGS_DIR, project_name, "a%i_bglibpy_trace.png" % gid)
     plot_bglibpy_trace(t, v, t_nd, v_nd, fig_name)
 
 
 if __name__ == "__main__":
-    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
+    project_name = "1f6af9a9-29c5-4459-ab07-1932f790b32d"
     main(project_name)
 
 
