@@ -123,12 +123,12 @@ def plot_rates(df, fig_name):
 
 
 if __name__ == "__main__":
-    project_name = "1f6af9a9-29c5-4459-ab07-1932f790b32d"
+    project_name = "18b7e015-97bc-4a16-a3df-b49cc076cf73"
     t_start, t_end = 2000, 7000  # connected network, spontaneous activity
     sim_paths = load_sim_paths(project_name)
 
     rates = get_rates(sim_paths, t_start, t_end)
-    plot_rates(rates, os.path.join(FIGS_DIR, project_name, "rates_Ca1p25.png"))
+    plot_rates(rates, os.path.join(FIGS_DIR, project_name, "rates_Ca1p2.png"))
 
 
 
