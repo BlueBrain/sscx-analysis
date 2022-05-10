@@ -341,8 +341,8 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
 
 def plot_assembly_diffs(df, fig_name):
     """Box plot and significance test of assembly synapse cluster on assembly neurons"""
+    order = np.sort(df["assembly"].unique()).astype(str)
     df.loc[:, "assembly"] = df["assembly"].astype(str)  # `statannotation` wants strings...
-    order = np.sort(df["assembly"].unique())
     df.loc[:, "pre_assembly"] = df["pre_assembly"].astype(str).replace({"-1": "not assembly"})
     df.loc[:, "pre_assembly"] = df["pre_assembly"].replace({i: "assembly" for i in order})
     df.loc[:, "clustered"] = df["clustered"].replace({True: "clustered", False: "not clustered"})
@@ -418,9 +418,9 @@ def plot_assembly_diffs(df, fig_name):
 
 def plot_late_assembly_diffs(df, fig_name):
     """Box plot and significance test of assembly synapse cluster on late assembly neurons"""
+    order = np.sort(df["pre_assembly"].unique()).astype(str)
     df.loc[:, "pre_assembly"] = df["pre_assembly"].astype(str)  # `statannotation` wants strings...
     df.loc[:, "clustered"] = df["clustered"].replace({True: "clustered", False: "not clustered"})
-    order = np.sort(df["pre_assembly"].unique())
     pairs = [("0", i) for i in order if i != "0"]
     hue_order = ["clustered", "not clustered"]
     pot_palette, dep_palette = {"clustered": RED, "not clustered": "gray"}, {"clustered": BLUE, "not clustered": "gray"}

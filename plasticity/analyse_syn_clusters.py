@@ -66,9 +66,9 @@ def group_diffs(syn_clusters, diffs):
     return grouped_diffs
 
 
-def get_grouped_diffs(seed, sim_path, report_name, late_assembly=False):
-    """Wrapper of other functions that together load and pre-calculate/group stuff for statistic tests and plotting"""
-    syn_clusters, gids = utils.load_synapse_clusters(seed, sim_path, late_assembly)
+def get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=False):
+    """Wrapper of other functions that together load and pre-calculate/group stuff for statistical tests and plotting"""
+    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, late_assembly)
     fracs = get_fracs(syn_clusters)
     diffs = utils.get_synapse_changes(sim_path, report_name, gids)
     probs = get_change_probs(syn_clusters, diffs)
@@ -131,7 +131,7 @@ def main(project_name):
     # morph_df = utils.load_extra_morph_features(["loc", "dist", "diam", "br_ord"])
 
     for seed, sim_path in sim_paths.iteritems():
-        _, probs, grouped_diffs = get_grouped_diffs(seed, sim_path, report_name)
+        _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name)
         df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
         fig_name = os.path.join(FIGS_DIR, project_name, "assembly_diff_stats_seed%i.png" % seed)
@@ -141,7 +141,7 @@ def main(project_name):
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
 
     for seed, sim_path in sim_paths.iteritems():
-        fracs, probs, grouped_diffs = get_grouped_diffs(seed, sim_path, report_name, late_assembly=True)
+        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=True)
         df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
         fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_diff_stats_seed%i.png" % seed)
@@ -154,5 +154,5 @@ def main(project_name):
 
 
 if __name__ == "__main__":
-    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
+    project_name = "LayerWiseEShotNoise_PyramidPatterns"
     main(project_name)
