@@ -289,13 +289,11 @@ def get_synapse_changes(sim_path, report_name, gids):
 
 def split_synapse_report(c, data, split_by):
     """Splits `data` (synapse report in DataFrame) into chunks, organized by `split_by` property of (post) gids"""
-    gids = data.columns.get_level_values(0).unique().to_numpy()
+    data.columns = data.columns.droplevel(1)  # exact syn idx don't matter here, so just drop them first...
+    gids = data.columns.unique().to_numpy()
     categories = c.cells.get(gids, split_by)
-    split_data = {}
-    unique_cats = np.sort(categories.unique())
-    for cat in unique_cats:
-        split_data[cat] = data[categories[categories == cat].index].to_numpy()
-    return split_data
+    grouped_gids = categories.to_frame().reset_index().groupby(split_by)["index"].apply(np.array)
+    return {cat: data.iloc[:, data.columns.isin(cat_gids)].to_numpy() for cat, cat_gids in grouped_gids.items()}
 
 
 def update_split_data(c, report_name, split_data, split_by):
