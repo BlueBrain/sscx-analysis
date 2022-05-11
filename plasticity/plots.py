@@ -135,7 +135,7 @@ def plot_gmax_change_pie(gmax_diffs, fig_name):
         ax.pie(sizes, labels=["%.2f%%" % ratio for ratio in ratios], colors=[RED, "lightgray", BLUE])
         ax.set_title("L%i (n = %i)" % (layer, n_syns))
     fig.tight_layout()
-    fig.savefig(fig_name, bbox_inches="tight", transparent=True)
+    fig.savefig(fig_name, bbox_inches="tight")
     plt.close(fig)
     plt.rcParams["patch.edgecolor"] = "white"
 
@@ -242,6 +242,23 @@ def plot_transition_matrix(transition_matrix, bins, fig_name):
     plt.close(fig)
 
 
+def plot_rate_vs_change(df, report_name, fig_name):
+    """Plots total changes (of mean per connection)
+    vs. (well it's just a histogram, not scatter plot....) mean pairwise firing rates"""
+    max_rate = df["pw_rate"].quantile(0.999)
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.hist([df.loc[df["delta"] < 0, "pw_rate"].to_numpy(),df.loc[df["delta"] > 0, "pw_rate"].to_numpy(),
+             df.loc[df["delta"] == 0, "pw_rate"].to_numpy()], bins=30, range=(0, max_rate),
+            color=[BLUE, RED, "lightgray"], stacked=True)
+    ax.set_xlabel("Mean pairwise rate (Hz)")
+    ax.set_xlim([0, max_rate])
+    ax.set_ylabel("#Connections")
+    sns.despine(offset=2, trim=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+
+
 # duplicated from `analyse_syn_clusters.py`...
 def _sort_keys(key_list):
     """Sort keys of assembly idx. If -1 is part of the list (standing for non-assembly) then that comes last"""
@@ -291,7 +308,7 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
     fig.colorbar(i_pot, cax=fig.add_subplot(gs[1, i+1]), label="P(pot|cond) - P(pot) /\n P(pot|cond) + P(pot)")
     fig.colorbar(i_dep, cax=fig.add_subplot(gs[2, i+1]), label="P(dep|cond) - P(pot) /\n P(dep|cond) + P(pot)")
     fig.tight_layout()
-    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -335,7 +352,7 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     ax4.set_xticks([0, 1])
     ax4.set_xticklabels(["clustered", "not clustered"], rotation=45)
     fig.tight_layout()
-    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -412,7 +429,7 @@ def plot_assembly_diffs(df, fig_name):
     annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
     sns.despine(bottom=True)
     fig.tight_layout()
-    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -476,7 +493,7 @@ def plot_late_assembly_diffs(df, fig_name):
     annotator.configure(test="Mann-Whitney", loc="outside", verbose=0).apply_and_annotate()
     sns.despine(bottom=True)
     fig.tight_layout()
-    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 

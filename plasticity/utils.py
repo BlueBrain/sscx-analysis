@@ -8,11 +8,11 @@ import warnings
 import pickle
 from tqdm.contrib import tzip
 import numpy as np
-import pandas as pd
 import numba
+from scipy.spatial.distance import squareform
+import pandas as pd
 import multiprocessing as mp
 from libsonata import ElementReportReader
-from bluepy.impl.spike_report import SpikeReport
 
 
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
@@ -63,9 +63,9 @@ def midx2str(midx, level_names):
         raise RuntimeError("Incorrect level_names passed")
 
 
-def get_spikes(sim, t_start, t_end):
+def get_spikes(sim, t_start, t_end, gids=None):
     """Extracts spikes with bluepy"""
-    spikes = sim.spikes.get(t_start=t_start, t_end=t_end)
+    spikes = sim.spikes.get(gids, t_start, t_end)
     return spikes.index.to_numpy(), spikes.values
 
 
@@ -78,9 +78,25 @@ def calc_rate(spike_times, N, t_start, t_end, bin_size=10):
 
 def calc_sc_rate(spiking_gids, t_start, t_end):
     """Calculates single cell firing rates"""
-    _, counts = np.unique(spiking_gids, return_counts=True)
+    gids, counts = np.unique(spiking_gids, return_counts=True)
     t = (t_end - t_start) * 1e-3  # *1e-3 ms to s conversion
-    return counts / t
+    return gids, counts / t
+
+
+def _pairwise_mean(x):
+    """Vectorized pairwise mean (returns the same upper triangular format as `pdist`)"""
+    i, j = np.triu_indices(len(x), k=1)
+    return (x[i] + x[j]) / 2
+
+
+def get_gids_pairwise_avg_rates(sim, gids, t_start, t_end):
+    """Builds matrix with means of pairwise single cell firing rates of given `gids`"""
+    rates = np.zeros_like(gids, dtype=np.float32)
+    _, spiking_gids = get_spikes(sim, t_start, t_end, gids)
+    tmp_gids, tmp_rates = calc_sc_rate(spiking_gids, t_start, t_end)
+    idx = np.isin(gids, tmp_gids, assume_unique=True)  # will take care of non-spiking gids...
+    rates[idx] = tmp_rates
+    return squareform(_pairwise_mean(rates))
 
 
 def load_tc_gids(project_name):
@@ -112,6 +128,7 @@ def _get_spikef_name(config):
 # copy-pasted from bglibpy/ssim.py (until BGLibPy will support adding spikes from SpikeFile!)
 def _parse_outdat(f_name):
     """Parse the replay spiketrains in a out.dat formatted file"""
+    from bluepy.impl.spike_report import SpikeReport
     spikes = SpikeReport.load(f_name).get()
     # convert Series to DataFrame with 2 columns for `groupby` operation
     spike_df = spikes.to_frame().reset_index()
@@ -357,5 +374,15 @@ def coarse_binning(bin_edges, data, new_nbins):
     return bin_edges[::q], new_data
 
 
+def load_td_edges(sim_path, report_name, agg_fn):
+    """Loads in time dependent aggregated edges (using conntility)"""
+    from conntility.connectivity import TimeDependentMatrix
+    h5f_name = os.path.join(os.path.split(sim_path)[0], "td_edges_%s.h5" % report_name)
+    conn_mat = TimeDependentMatrix.from_h5(h5f_name)
+    gids, idx, edges = conn_mat.gids, conn_mat._edge_indices.copy(), conn_mat._edges
+    del conn_mat
+    df = edges.loc[:, edges.columns.get_level_values("data") == agg_fn]
+    df.columns = df.columns.droplevel("data")
+    return gids, idx, df
 
 

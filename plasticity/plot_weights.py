@@ -7,7 +7,7 @@ import os
 from tqdm import tqdm
 from copy import deepcopy
 import numpy as np
-from bluepy import Circuit
+from bluepy import Circuit, Simulation
 import utils
 import plots
 
@@ -15,7 +15,7 @@ FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/sscx-analysis"
 
 
 def get_total_change_by(sim_path, report_name, split_by="layer", return_data=False):
-    """Loads full report, splits it and gets total change (last-first time step)"""
+    """Loads full report, splits it, updates it with non-reported data, and gets total change (last-first time step)"""
     c = Circuit(sim_path)
     h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
     data = utils.load_synapse_report(h5f_name, return_idx=True)
@@ -43,7 +43,7 @@ def get_mean_rho_matrix(df):
         df_mtype = df.loc[df["pre_mtype"] == mtype]
         mean_rhos[i, :] = df_mtype.groupby("post_mtype").mean("rho").to_numpy().reshape(-1)
         sum_rhos[i, :] = df_mtype.groupby("post_mtype").sum("rho").to_numpy().reshape(-1)
-    mean_rhos[sum_rhos < 5000] = np.nan  # the threshold of 5000 synapses is pretty arbitrary
+    mean_rhos[sum_rhos < 5000] = np.nan  # the threshold of at least 5000 synapses is pretty arbitrary
     return mtypes, mean_rhos
 
 
@@ -69,6 +69,17 @@ def get_transition_matrix(data, bins):
     bin_edges[-1] -= 1e-5
     return transition_matrix, bin_edges
 
+
+def corr_pw_rate2change(sim_path, report_name, t_start, t_end):
+    """Correlate (builds DataFrame with 2 columns...) mean pairwise firing rates
+    and the total change of mean (per connection) values"""
+    gids, conn_idx, agg_data = utils.load_td_edges(sim_path, report_name, agg_fn="mean")
+    assert agg_data.columns.name == "time", "Aggregated data is not in the expected format (columns should be `time`)"
+    df = (agg_data.iloc[:, -1] - agg_data.iloc[:, 0]).to_frame("delta")
+    del agg_data
+    pw_rates = utils.get_gids_pairwise_avg_rates(Simulation(sim_path), gids, t_start, t_end)
+    df["pw_rate"] = pw_rates[conn_idx["row"].to_numpy(), conn_idx["col"].to_numpy()]
+    return df
 
 def main(project_name):
     sim_paths = utils.load_sim_paths(project_name)
@@ -102,8 +113,11 @@ def main(project_name):
         mtypes, last_rho_matrix = get_mean_rho_matrix(last_df)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_matrix.png" % utils.midx2str(idx, level_names))
         plots.plot_mean_rho_matrix(deepcopy(last_t), mtypes, last_rho_matrix, fig_name)
-
+        rate_change_df = corr_pw_rate2change(sim_path, report_name, t[0], t[-1])
+        fig_name = os.path.join(FIGS_DIR, project_name, "%srate_vs_rho.png" % utils.midx2str(idx, level_names))
+        plots.plot_rate_vs_change(rate_change_df, report_name, fig_name)
+        
 
 if __name__ == "__main__":
-    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
+    project_name = "LayerWiseEShotNoise_PyramidPatterns"
     main(project_name)
