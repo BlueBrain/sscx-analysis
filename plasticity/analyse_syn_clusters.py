@@ -76,18 +76,36 @@ def get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=F
     return fracs, probs, grouped_diffs
 
 
+def _balance_df(df, seed=12345):
+    """Takes full synapse (rho change) DataFrame (for a given assembly) and samples
+    non-assembly and non-clustered synapses in order to have a balanced dataset for statistical testing
+    (number of assembly and non-assembly neurons will match,
+    but number of clustered and non-clustered won't as those are only balanced within the assembly/non-assembly cond.)"""
+    dfs = []
+    assembly_df = df.loc[df["pre_assembly"] != -1]
+    dfs.append(assembly_df)
+    counts = assembly_df["clustered"].value_counts()
+    for clustered, nsamples in counts.items():
+        dfs.append(df.loc[(df["pre_assembly"] == -1) & (df["clustered"] == clustered)].sample(nsamples, random_state=seed))
+    return pd.concat(dfs)
+
+
 def diffs2df(grouped_diffs):
     """Creates a DataFrame from `grouped_diffs` (easier to understand, plot and merge with extra morph. features)"""
-    dfs = []
+    dfs, balanced_dfs = [], []
     for assembly_id, tmp in grouped_diffs.items():
+        dfs_tmp = []
         for pre_assembly_id, diffs in tmp.items():
             for clustered_int, clustered_bool in zip([0, 1], [False, True]):
                 df = diffs[clustered_int].to_frame()
                 df["assembly"] = assembly_id
                 df["pre_assembly"] = pre_assembly_id
                 df["clustered"] = clustered_bool
-                dfs.append(df)
-    return pd.concat(dfs).sort_index()
+                dfs_tmp.append(df)
+        df = pd.concat(dfs_tmp)
+        dfs.append(df)
+        balanced_dfs.append(_balance_df(df))
+    return pd.concat(dfs).sort_index(), pd.concat(balanced_dfs).sort_index()
 
 
 def _sort_keys(key_list):
@@ -131,26 +149,32 @@ def main(project_name):
     # morph_df = utils.load_extra_morph_features(["loc", "dist", "diam", "br_ord"])
 
     for seed, sim_path in sim_paths.iteritems():
+        # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
         _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name)
-        df = diffs2df(deepcopy(grouped_diffs))
-        # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
-        fig_name = os.path.join(FIGS_DIR, project_name, "assembly_diff_stats_seed%i.png" % seed)
-        plot_assembly_diffs(df, fig_name)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
-
-    for seed, sim_path in sim_paths.iteritems():
-        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=True)
-        df = diffs2df(deepcopy(grouped_diffs))
+        # quantifying the significance of the change
+        # TODO: only do hyp. testing if there is a positive Michaelson contrast above...
+        _, balanced_df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
-        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_diff_stats_seed%i.png" % seed)
-        plot_late_assembly_diffs(df.loc[df["pre_assembly"] >= 0], fig_name)
+        fig_name = os.path.join(FIGS_DIR, project_name, "assembly_diff_stats_seed%i.png" % seed)
+        plot_assembly_diffs(balanced_df, fig_name)
+
+    '''
+    for seed, sim_path in sim_paths.iteritems():
+        # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
+        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=True)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_cond_probs_seed%i.png" % seed)
         # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
         # and as some preprocessing functions create dicts, one has to select it by the `0` key here...
         plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
+        df = diffs2df(deepcopy(grouped_diffs))
+        # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
+        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_diff_stats_seed%i.png" % seed)
+        plot_late_assembly_diffs(df.loc[df["pre_assembly"] >= 0], fig_name)
+    '''
 
 
 if __name__ == "__main__":
