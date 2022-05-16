@@ -126,17 +126,19 @@ def diffs2df(grouped_diffs):
     return pd.concat(dfs).sort_index()
 
 
-def _prepare2statmodels(df, nsamples, seed=12345):
-    """Prepares DataFrame for significance testing in `statmodels` (renaming stuff and balancing dataset)"""
+def _prepare2statmodels(df, nsamples, late_assembly, seed=12345):
+    """Prepares DataFrame for significance testing in `statmodels` (renaming stuff and balancing dataset)
+    if `late_assembly=True` it deletes *within* late assembly synapses
+    - and will only test *cross* assembly vs. non-assembly synapses"""
+    if late_assembly:  # remove within assembly synapses
+        df = df.loc[df["assembly"] != df["pre_assembly"], :]
     # get rid of assembly IDs, and replace pre_assembly IDs with just True/False (+rename the column)
     df.loc[df["pre_assembly"] != -1, "assembly"] = True
     df.loc[df["pre_assembly"] == -1, "assembly"] = False
     df.drop("pre_assembly", axis=1, inplace=True)
     # balance dataset
-    n_ca = df.loc[df["assembly"] == True, "clustered"].value_counts()[True]  # number of clustered assembly syns
-    if nsamples is None or nsamples > n_ca:
-        # take exactly as many samples from all categories as there are clustered assembly syns
-        nsamples = n_ca
+    nmax = df.groupby(["assembly", "clustered"]).size().min()  # get the min number of synapses in the 4 categories
+    nsamples = nmax if nsamples > nmax else nsamples
     dfs = [df.loc[(df["assembly"] == True) & (df["clustered"] == True)].sample(nsamples, random_state=seed)]
     dfs.append(df.loc[(df["assembly"] == True) & (df["clustered"] == False)].sample(nsamples, random_state=seed))
     dfs.append(df.loc[(df["assembly"] == False) & (df["clustered"] == True)].sample(nsamples, random_state=seed))
@@ -160,9 +162,9 @@ def _prepare2statannotations(tukey_df):
     return pairs, p_vals
 
 
-def test_significance(df, nsamples=None, sign_th=0.05):
+def test_significance(df, nsamples=500, late_assembly=False, sign_th=0.05):
     """Performs 2-way ANOVA and post-hoc Tukey's test using `statmodels`"""
-    balanced_df = _prepare2statmodels(df, nsamples=nsamples)
+    balanced_df = _prepare2statmodels(df, nsamples=nsamples, late_assembly=late_assembly)
     model = ols('delta_rho ~ C(assembly) + C(clustered) + C(assembly):C(clustered)', data=balanced_df).fit()
     anova_df = sm.stats.anova_lm(model, typ=2)
     if np.nanmin(anova_df["PR(>F)"].to_numpy()) < sign_th:
@@ -188,12 +190,10 @@ def main(project_name):
     for seed, sim_path in sim_paths.iteritems():
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
         _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name)
-        '''
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
-        '''
-        # quantifying if the amount of any change is significant
+        # checking if the amount of any change is significant
         df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
@@ -201,7 +201,23 @@ def main(project_name):
         fig_name = os.path.join(FIGS_DIR, project_name, "assembly_diff_stats_seed%i.png" % seed)
         plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
 
+        # same as above, but for late assembly
+        # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
+        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=True)
+        pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
+        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_cond_probs_seed%i.png" % seed)
+        # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
+        # and as some preprocessing functions create dicts, one has to select it by the `0` key here...
+        plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
+        # checking if the amount of any change is significant
+        df = diffs2df(deepcopy(grouped_diffs))
+        pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0], late_assembly=True)
+        dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0], late_assembly=True)
+        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_diff_stats_seed%i.png" % seed)
+        plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
+
+
 
 if __name__ == "__main__":
-    project_name = "LayerWiseEShotNoise_PyramidPatterns"
+    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
     main(project_name)
