@@ -18,6 +18,69 @@ sns.set(style="ticks", context="notebook")
 RED, BLUE = "#e32b14", "#3271b8"
 
 
+def plot_lw_rates(df, mean_str, sd_str, fig_name):
+    """Plot layer-wise firing rates (split by E-I types)"""
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(4, 2, 1)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L23E"],
+                palette="OrRd", ax=ax)
+    ax.axhline(0.24, color="red", ls="--", label="RP_2015")
+    ax.axhline(0.32, color="gray", ls="--", label="dKS_2007")
+    ax.set_title("Excitatory")
+    ax.set_xlabel(""); ax.set_ylabel("L23 rate (Hz)")
+    ax.legend(frameon=False)
+    # for container in ax.containers:
+    #     ax.bar_label(container)
+    ax = fig.add_subplot(4, 2, 3)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L4E"],
+                palette="OrRd", ax=ax)
+    ax.axhline(0.44, color="red", ls="--")
+    ax.axhline(0.58, color="gray", ls="--")
+    ax.set_xlabel(""); ax.set_ylabel("L4 rate (Hz)")
+    ax.legend([], [], frameon=False)
+    ax = fig.add_subplot(4, 2, 5)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L5E"],
+                palette="OrRd", ax=ax)
+    ax.axhline(1.35, color="red", ls="--")
+    ax.axhline(2.37, color="gray", ls="--")
+    ax.legend([], [], frameon=False)
+    ax.set_xlabel(""); ax.set_ylabel("L5 rate (Hz)")
+    ax = fig.add_subplot(4, 2, 7)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L6E"],
+                palette="OrRd", ax=ax)
+    ax.axhline(0.47, color="gray", ls="--")
+    ax.legend([], [], frameon=False)
+    ax.set_ylabel("L6 rate (Hz)")
+    ax = fig.add_subplot(4, 2, 2)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L23I"],
+                palette="PuBu", ax=ax)
+    ax.axhline(0.19, color="red", ls="--")
+    ax.set_title("Inhibitory")
+    ax.set_xlabel(""); ax.set_ylabel("")
+    ax.legend(title="shotn_sd_pct", frameon=False)
+    ax = fig.add_subplot(4, 2, 4)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L4I"],
+                palette="PuBu", ax=ax)
+    ax.axhline(0.96, color="red", ls="--")
+    ax.legend([], [], frameon=False)
+    ax.set_xlabel(""); ax.set_ylabel("")
+    ax = fig.add_subplot(4, 2, 6)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L5I"],
+                palette="PuBu", ax=ax)
+    ax.axhline(1.34, color="red", ls="--")
+    ax.legend([], [], frameon=False)
+    ax.set_xlabel(""); ax.set_ylabel("")
+    ax = fig.add_subplot(4, 2, 8)
+    sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L6I"],
+                palette="PuBu", ax=ax)
+    ax.legend([], [], frameon=False)
+    ax.set_ylabel("")
+    sns.despine(bottom=True, trim=True)
+    fig.tight_layout()
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 def _get_nsyn_range(n_syns_dict):
     """Concatenates convergence results and return overall min, max and 95% percentile"""
     pattern_names = list(n_syns_dict.keys())
