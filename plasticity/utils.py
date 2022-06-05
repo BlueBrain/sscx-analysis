@@ -1,6 +1,6 @@
 """
 Plastic SSCx related utility functions (most of them deal with the custom directory and file structure)
-author: András Ecker, last update: 01.2022
+author: András Ecker, last update: 06.2022
 """
 
 import os
@@ -34,8 +34,8 @@ def load_sim_paths(project_name):
     else:
         bc_path = os.path.join(SIMS_DIR, project_name, "BlueConfig")
         if os.path.isfile(bc_path):
-            # warnings.warn("No bbp-workflow generated pandas MI DF found. Creating one with a single entry.")
-            return pd.Series(data=bc_path)
+            warnings.warn("No bbp-workflow generated pandas MI DF found. Creating one with a single entry.")
+            return pd.Series(data=bc_path, index=[0], name="sim")
         else:
             raise RuntimeError("Neither `analyses/simulations.pkl` nor `BlueConfig` found under %s" %
                                os.path.join(SIMS_DIR, project_name))
