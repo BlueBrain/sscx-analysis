@@ -1,6 +1,6 @@
 """
 Plot SSCx hex_O1 rasters
-author: András Ecker, last update: 11.2021
+author: András Ecker, last update: 06.2022
 """
 
 import os
@@ -224,7 +224,7 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 if __name__ == "__main__":
 
-    project_name = "1f6af9a9-29c5-4459-ab07-1932f790b32d"
+    project_name = "LayerWiseEOUNoise"
     t_start = 1500
     plt_patterns = False
     plt_pattern_spikes = False
@@ -247,6 +247,8 @@ if __name__ == "__main__":
         plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
 
         if plt_pattern_spikes and "stim_seed" not in level_names:
+            if not plt_patterns:
+                pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name)
             pattern_spikes, pattern_sc_rates, pattern_rates = get_pattern_rates(pattern_gids,
                             proj_spikes["VPM"]["spike_times"], proj_spikes["VPM"]["spiking_gids"], t_start, t_end)
             fig_name = os.path.join(FIGS_DIR, project_name, "%spatterns.png" % utils.midx2str(idx, level_names))
