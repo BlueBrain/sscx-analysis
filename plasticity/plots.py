@@ -119,6 +119,15 @@ def plot_tc_convergence(n_syns_dict, patterns_dir):
     plt.close(fig)
 
 
+def plot_nconns_matrix(nconns_matrix, fig_name):
+    """Plots heatmap of normalized number of connections matrix"""
+    fig = plt.figure(figsize=(10, 9))
+    ax = fig.add_subplot(1, 1, 1)
+    sns.heatmap(data=nconns_matrix, annot=True, fmt=".1f", linewidths=0.2, ax=ax)
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 def plot_gmax_dists(gmax, fig_name):
     """Plots gmax distribution (on log scale) over time"""
     n_tbins = gmax.shape[0]
