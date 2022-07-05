@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from bluepy import Simulation
 from bluepy.enums import Cell
-from utils import load_sim_paths, get_spikes
+from utils import load_sim_paths, ensure_dir, get_spikes
 from plots import plot_lw_rates
 
 
@@ -56,12 +56,23 @@ def get_rates(sim_paths, t_start, t_end, norm="total"):
 
 
 if __name__ == "__main__":
-    project_name = "0e1afde3-2cc3-480e-89e5-950bdb3ce9aa"
-    t_start, t_end = 2000, 7000  # connected network, spontaneous activity
-    sim_paths = load_sim_paths(project_name)
-    rates = get_rates(sim_paths, t_start, t_end)
+    project_name = "c5cd0f6a-fe2f-449b-9b56-21bb1cb4968a"
+    t_start, t_end = 1500, 3500  # connected network, spontaneous activity
 
-    plot_lw_rates(rates, "ou_mean_pct", "ou_sd_pct", os.path.join(FIGS_DIR, project_name, "lw_rates.png"))
+    sim_paths = load_sim_paths(os.path.join("/gpfs/bbp.cscs.ch/project/proj83/scratch/bbp_workflow/ji_cond_plast/",
+                                            project_name, "analyses", "simulations.pkl"))
+    ensure_dir(os.path.join(FIGS_DIR, project_name))
+    rates = get_rates(sim_paths, t_start, t_end)
+    rates.to_pickle("rates.pkl")
+
+    rates = pd.read_pickle("rates.pkl")
+
+    plot_lw_rates(rates.loc[rates["ca"] == 1.1], "fr_scale", "depol_stdev_mean_ratio",
+                  os.path.join(FIGS_DIR, project_name, "lw_rates_Ca1p1.png"))
+    plot_lw_rates(rates.loc[rates["ca"] == 1.15], "fr_scale", "depol_stdev_mean_ratio",
+                  os.path.join(FIGS_DIR, project_name, "lw_rates_Ca1p15.png"))
+    plot_lw_rates(rates.loc[rates["ca"] == 1.2], "fr_scale", "depol_stdev_mean_ratio",
+                  os.path.join(FIGS_DIR, project_name, "lw_rates_Ca1p2.png"))
 
 
 
