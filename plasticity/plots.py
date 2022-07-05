@@ -18,14 +18,14 @@ sns.set(style="ticks", context="notebook")
 RED, BLUE = "#e32b14", "#3271b8"
 
 
-def plot_lw_rates(df, mean_str, sd_str, fig_name):
-    """Plot layer-wise firing rates (split by E-I types)"""
+def plot_lw_rates(df, mean_str, sd_str, rp_2015_rates, dks_2007_rates,  fig_name):
+    """Plot layer-wise firing rates (split by E-I types) and (in vivo) reference values"""
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(4, 2, 1)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L23E"],
                 palette="OrRd", ax=ax)
-    ax.axhline(0.07, color="red", ls="--", label="RP_2015")
-    ax.axhline(0.32, color="gray", ls="--", label="dKS_2007")
+    ax.axhline(rp_2015_rates["L23E"], color="red", ls="--", label="RP_2015")
+    ax.axhline(dks_2007_rates["L23E"], color="gray", ls="--", label="dKS_2007")
     ax.set_title("Excitatory")
     ax.set_xlabel(""); ax.set_ylabel("L23 rate (Hz)")
     ax.legend(frameon=False)
@@ -34,40 +34,40 @@ def plot_lw_rates(df, mean_str, sd_str, fig_name):
     ax = fig.add_subplot(4, 2, 3)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L4E"],
                 palette="OrRd", ax=ax)
-    ax.axhline(0.61, color="red", ls="--")
-    ax.axhline(0.58, color="gray", ls="--")
+    ax.axhline(rp_2015_rates["L4E"], color="red", ls="--")
+    ax.axhline(dks_2007_rates["L4E"], color="gray", ls="--")
     ax.set_xlabel(""); ax.set_ylabel("L4 rate (Hz)")
     ax.legend([], [], frameon=False)
     ax = fig.add_subplot(4, 2, 5)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L5E"],
                 palette="OrRd", ax=ax)
-    ax.axhline(1.25, color="red", ls="--")
-    ax.axhline(2.37, color="gray", ls="--")
+    ax.axhline(rp_2015_rates["L5E"], color="red", ls="--")
+    ax.axhline(dks_2007_rates["L5E"], color="gray", ls="--")
     ax.legend([], [], frameon=False)
     ax.set_xlabel(""); ax.set_ylabel("L5 rate (Hz)")
     ax = fig.add_subplot(4, 2, 7)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L6E"],
                 palette="OrRd", ax=ax)
-    ax.axhline(0.47, color="gray", ls="--")
+    ax.axhline(dks_2007_rates["L6E"], color="gray", ls="--")
     ax.legend([], [], frameon=False)
     ax.set_ylabel("L6 rate (Hz)")
     ax = fig.add_subplot(4, 2, 2)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L23I"],
                 palette="PuBu", ax=ax)
-    ax.axhline(0.96, color="red", ls="--")
+    ax.axhline(rp_2015_rates["L23I"], color="red", ls="--")
     ax.set_title("Inhibitory")
     ax.set_xlabel(""); ax.set_ylabel("")
-    ax.legend(title="shotn_sd_pct", frameon=False)
+    ax.legend(title=sd_str, frameon=False)
     ax = fig.add_subplot(4, 2, 4)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L4I"],
                 palette="PuBu", ax=ax)
-    ax.axhline(1.22, color="red", ls="--")
+    ax.axhline(rp_2015_rates["L4I"], color="red", ls="--")
     ax.legend([], [], frameon=False)
     ax.set_xlabel(""); ax.set_ylabel("")
     ax = fig.add_subplot(4, 2, 6)
     sns.barplot(x=mean_str, y="rate", hue=sd_str, data=df[df["cell_type"] == "L5I"],
                 palette="PuBu", ax=ax)
-    ax.axhline(2.35, color="red", ls="--")
+    ax.axhline(rp_2015_rates["L5I"], color="red", ls="--")
     ax.legend([], [], frameon=False)
     ax.set_xlabel(""); ax.set_ylabel("")
     ax = fig.add_subplot(4, 2, 8)
@@ -75,6 +75,47 @@ def plot_lw_rates(df, mean_str, sd_str, fig_name):
                 palette="PuBu", ax=ax)
     ax.legend([], [], frameon=False)
     ax.set_ylabel("")
+    sns.despine(bottom=True, trim=True)
+    fig.tight_layout()
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
+def plot_lw_rates_pct(df, mean_str, sd_str, fig_name):
+    """Plot percentage of layer-wise in silico firing rates (split by E-I types)"""
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(3, 2, 1)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L23E"],
+                palette="OrRd", ax=ax)
+    ax.set_title("Excitatory")
+    ax.set_xlabel(""); ax.set_ylabel("L23 rate (% of in vivo)"); ax.set_ylim([0, 100])
+    ax.legend(frameon=False)
+    ax = fig.add_subplot(3, 2, 3)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L4E"],
+                palette="OrRd", ax=ax)
+    ax.set_xlabel(""); ax.set_ylabel("L4 rate (% of in vivo)"); ax.set_ylim([0, 100])
+    ax.legend([], [], frameon=False)
+    ax = fig.add_subplot(3, 2, 5)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L5E"],
+                palette="OrRd", ax=ax)
+    ax.set_ylabel("L5 rate (% of in vivo)"); ax.set_ylim([0, 100])
+    ax.legend([], [], frameon=False)
+    ax = fig.add_subplot(3, 2, 2)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L23I"],
+                palette="PuBu", ax=ax)
+    ax.set_title("Inhibitory")
+    ax.set_xlabel(""); ax.set_ylabel(""); ax.set_ylim([0, 100])
+    ax.legend(title=sd_str, frameon=False)
+    ax = fig.add_subplot(3, 2, 4)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L4I"],
+                palette="PuBu", ax=ax)
+    ax.set_xlabel(""); ax.set_ylabel(""); ax.set_ylim([0, 100])
+    ax.legend([], [], frameon=False)
+    ax = fig.add_subplot(3, 2, 6)
+    sns.barplot(x=mean_str, y="rate_pct", hue=sd_str, data=df[df["cell_type"] == "L5I"],
+                palette="PuBu", ax=ax)
+    ax.set_ylabel(""); ax.set_ylim([0, 100])
+    ax.legend([], [], frameon=False)
     sns.despine(bottom=True, trim=True)
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
