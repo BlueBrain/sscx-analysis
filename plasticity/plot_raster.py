@@ -82,7 +82,8 @@ def get_pattern_rates(pattern_gids, spike_times, spiking_gids, t_start, t_end):
         mask = np.isin(spiking_gids, gids)
         if mask.sum() > 0:
             pattern_spikes[name] = {"spike_times": spike_times[mask], "spiking_gids": spiking_gids[mask]}
-            pattern_sc_rates[name] = utils.calc_sc_rate(spiking_gids[mask], t_start, t_end)
+            _, sc_rate = utils.calc_sc_rate(spiking_gids[mask], t_start, t_end)
+            pattern_sc_rates[name] = sc_rate
             pattern_rates[name] =  utils.calc_rate(spike_times[mask], len(np.unique(spiking_gids[mask])), t_start, t_end)
     return pattern_spikes, pattern_sc_rates, pattern_rates
 
@@ -224,10 +225,10 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 if __name__ == "__main__":
 
-    project_name = "LayerWiseEOUNoise"
-    t_start = 1500
+    project_name = "4590c60f-a52e-437b-aa88-1276f96029c4"
+    t_start = 2000
     plt_patterns = False
-    plt_pattern_spikes = False
+    plt_pattern_spikes = True
 
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
