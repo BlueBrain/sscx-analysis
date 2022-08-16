@@ -52,9 +52,9 @@ def get_norm_nconns(M):
 
 def plot_nconns_matrix(nconns_matrix, fig_name):
     """Plots heatmap of normalized number of connections matrix"""
-    fig = plt.figure(figsize=(10, 9))
+    fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(1, 1, 1)
-    sns.heatmap(data=nconns_matrix, annot=True, fmt=".1f", linewidths=0.2, ax=ax)
+    sns.heatmap(data=nconns_matrix, cmap="viridis", annot=True, fmt=".1f", linewidths=0.2, cbar=False, ax=ax)
     ax.set_xlabel("to layer")
     ax.set_ylabel("from layer")
     ax.set_title("Layer-wise EXC connections")
