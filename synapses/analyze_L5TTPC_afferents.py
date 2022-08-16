@@ -18,6 +18,7 @@ import seaborn as sns
 sns.set(style="ticks", context="notebook")
 FIGS_PATH = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures"
 LAYERS = [i+1 for i in range(6)]
+COLUMNS = ["L%i_EXC" % l for l in LAYERS] + ["L%i_INH" % l for l in LAYERS]
 
 
 def _counts_by_layers(c, gids):
@@ -29,41 +30,48 @@ def _counts_by_layers(c, gids):
     return counts
 
 
-def get_afferents(c, mtype={"$regex": "L5_TPC:(A|B)"}, nsamples=10000):
-    """Counts E and I afferent by layer
-    (Could be speed up by defining pre_gids, finding synapse idx, then returning PRE_GID *and* POST_GID
-    and doing `groupby` on the properties df... A.E. 08.2022)"""
-    # initialize dict to store results (will be converted to a nice df later)
-    tmp = {layer:[] for layer in [1, 2, 3, 4, 5, 6]}
-    tmp["gid"] = []; tmp["Type"] = []
+def get_afferents(c, mtype={"$regex": "L5_TPC:(A|B)"}, TC=True, nsamples=10000):
+    """Counts E and I afferent by layer"""
+    results = np.zeros((nsamples, 1 + len(COLUMNS)), dtype=int)
     central_gids = c.cells.ids({"$target": "central_column_4_region_700um", Cell.MTYPE: mtype})
-    for gid in tqdm(take_n(central_gids, nsamples)):
-        syn_idx = c.connectome.afferent_synapses(gid)  # this works only for a single gid...
-        df = c.connectome.synapse_properties(syn_idx, [Synapse.TYPE, Synapse.PRE_GID, Synapse.G_SYNX])
+    sample_gids = take_n(central_gids, nsamples)
+    for i, gid in enumerate(tqdm(sample_gids)):
+        results[i, 0] = gid
+        df = c.connectome.afferent_synapses(gid, [Synapse.TYPE, Synapse.PRE_GID])
         # process presynaptic E gids:
         pregids_exc = df.loc[df[Synapse.TYPE].values >= 100][Synapse.PRE_GID].to_numpy()
-        counts = _counts_by_layers(c, pregids_exc)
-        tmp["gid"].append(gid); tmp["Type"].append("E")
-        for i, count in enumerate(counts):
-            tmp[i+1].append(count)
+        results[i, 1:7] = _counts_by_layers(c, pregids_exc)
         # process presynaptic I gids:
         pregids_inh = df.loc[df[Synapse.TYPE].values < 100][Synapse.PRE_GID].to_numpy()
-        counts = _counts_by_layers(c, pregids_inh)
-        tmp["gid"].append(gid); tmp["Type"].append("I")
-        for i, count in enumerate(counts):
-            tmp[i+1].append(count)
-    return pd.DataFrame.from_dict(tmp)
+        results[i, 7:13] = _counts_by_layers(c, pregids_inh)
+    df = pd.DataFrame(index=results[:, 0], data=results[:, 1:], columns=COLUMNS)
+    df.drop(columns="L1_EXC", inplace=True)
+    if TC:
+        tc_results = np.zeros((nsamples, 3), dtype=int)
+        for i, gid in enumerate(tqdm(sample_gids)):
+            tc_results[i, 0] = gid
+            tc_results[i, 1] = len(c.projection("Thalamocortical_input_VPM").afferent_synapses(gid))
+            tc_results[i, 2] = len(c.projection("Thalamocortical_input_POM").afferent_synapses(gid))
+        tc_df = pd.DataFrame(index=tc_results[:, 0], data=tc_results[:, 1:], columns=["VPM", "POm"])
+        df = pd.concat((df, tc_df), axis=1)
+    return df
 
 
 def plot_afferents(df, fig_name):
     """Boxplot afferents"""
     # pd magic to get plotable df
-    df_long = pd.melt(df, id_vars=["Type"], value_vars=LAYERS, value_name="#Afferents", var_name="Layer")
+    df_long = pd.melt(df, var_name="Source", value_name="#Afferents")
+    df_long["Type"] = "EXC"
+    df_long.loc[df_long.loc[:, "Source"].str.contains("INH"), "Type"] = "INH"
+    df_long["Source"].replace("_EXC", "", regex=True, inplace=True)
+    df_long["Source"].replace("_INH", "", regex=True, inplace=True)
+
     fig = plt.figure(figsize=(9., 6.))
     ax = fig.add_subplot(1, 1, 1)
     sns.despine()
-    sns.boxplot(x="Layer", y="#Afferents", hue="Type", hue_order=["E", "I"], order=LAYERS,
-                palette=sns.xkcd_palette(["red", "blue"]), ax=ax, data=df_long)
+    sns.boxplot(x="Source", y="#Afferents", hue="Type", hue_order=["EXC", "INH"],
+                order=["L%i" % l for l in LAYERS] + ["VPM", "POm"], palette=sns.xkcd_palette(["red", "blue"]),
+                showfliers=False, ax=ax, data=df_long)
     ax.set_title("L5 TTPC afferents")
     #ax.set_yscale("log")
     fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
@@ -71,6 +79,6 @@ def plot_afferents(df, fig_name):
 
 
 if __name__ == "__main__":
-    c = Circuit("/gpfs/bbp.cscs.ch/project/proj83/circuits/Bio_M/20200805/CircuitConfig")
+    c = Circuit("/gpfs/bbp.cscs.ch/project/proj83/circuits/Bio_M/20200805/CircuitConfig_TC")
     df = get_afferents(c)
     plot_afferents(df, os.path.join(FIGS_PATH, "L5_TTPC_afferents.png"))
