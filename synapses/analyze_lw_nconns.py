@@ -8,9 +8,13 @@ import os
 import numpy as np
 import pandas as pd
 from conntility.connectivity import ConnectivityMatrix
-from plots import plot_nconns_matrix
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/sscx-analysis"
+sns.set(style="ticks", context="notebook")
+FIGS_PATH = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures"
 MTYPES = {"L23": ["L2_IPC", "L2_TPC:A", "L2_TPC:B", "L3_TPC:A", "L3_TPC:C"],
           "L4": ["L4_SSC", "L4_TPC", "L4_UPC"], "L5": ["L5_TPC:A", "L5_TPC:B", "L5_TPC:C", "L5_UPC"],
           "L6": ["L6_BPC", "L6_HPC", "L6_IPC", "L6_TPC:A", "L6_TPC:C", "L6_UPC"]}
@@ -46,10 +50,22 @@ def get_norm_nconns(M):
     return df
 
 
+def plot_nconns_matrix(nconns_matrix, fig_name):
+    """Plots heatmap of normalized number of connections matrix"""
+    fig = plt.figure(figsize=(10, 9))
+    ax = fig.add_subplot(1, 1, 1)
+    sns.heatmap(data=nconns_matrix, annot=True, fmt=".1f", linewidths=0.2, ax=ax)
+    ax.set_xlabel("to layer")
+    ax.set_ylabel("from layer")
+    ax.set_title("Layer-wise EXC connections")
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     M = get_conn_mat()
     nconns_matrix = get_norm_nconns(M)
-    plot_nconns_matrix(nconns_matrix, os.path.join(FIGS_DIR, "norm_nconns.png"))
+    plot_nconns_matrix(nconns_matrix, os.path.join(FIGS_PATH, "norm_nconns.png"))
 
 
 
