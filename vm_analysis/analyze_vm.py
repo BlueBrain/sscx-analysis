@@ -11,23 +11,25 @@ from scipy.signal import welch
 import pandas as pd
 from bluepy import Simulation
 from utils import parse_stim_blocks, stim2str
-from plots import plot_vm_dist_spect
+from plots import plot_vm_dist_spect, plot_heatmap_grid
 
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
-SIGN_TH = 0.05  # alpha level for significance tests
+SIGN_TH = 0.1  # alpha level for significance tests
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/sscx-analysis/vm_analysis"
+BASE_SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/singlecell/L5TPC_exemplar/Current/"
 
 
 def analyze_v_dist(v):
     """Analyzes V_m distribution"""
+    spiking = np.any(v > SPIKE_TH)
+    v = v[v < SIGN_TH]  # get rid of spikes for the rest of the analysis
     _, p = normaltest(v)  # there are a bunch of other tests for normality...
     normal = True if p > SIGN_TH else False
-    spiking = np.any(v > SPIKE_TH)
     return np.mean(v), np.std(v), normal, spiking
 
 
 def analyze_v_spectrum(v, fs, freq_window):
-    """Analyzes the spectrum of V_m"""
+    """Analyzes the spectrum of V_m TODO: get rid of spikes (properly)"""
     f, pxx = welch(v, fs=fs)
     # cut low freq. part before fitting a line to log-log data
     idx = np.where((freq_window[0] < f) & (f < freq_window[1]))[0]
@@ -35,7 +37,7 @@ def analyze_v_spectrum(v, fs, freq_window):
     return f, pxx, coeffs
 
 
-def main(sim, t_start_offset=300, freq_window=[10, 5000], plot_results=True):
+def main(sim, t_start_offset=300, freq_window=[10, 5000], plot_results=False):
     # load report with bluepy
     report = sim.report("soma")
     fs = 1 / (report.meta["time_step"] / 1000)
@@ -61,11 +63,16 @@ def main(sim, t_start_offset=300, freq_window=[10, 5000], plot_results=True):
 
 
 if __name__ == "__main__":
-    bc_path = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/singlecell/L5TPC_exemplar/" \
-              "Current/AbsoluteShotNoise/seed161981/tau_fast/ampcv0.25/sigma0.010/BlueConfig"
-    sim = Simulation(bc_path)
-    results = main(sim)
-    print(results)
+    results = []
+    for tau in ["tau_fast", "tau_slow"]:
+        for amp_cv in ["ampcv0.25", "ampcv0.5", "ampcv0.75", "ampcv1.0", "ampcv1.25"]:
+            for sigma in ["sigma10", "sigma15", "sigma20", "sigma25", "sigma30"]:
+                sim = Simulation(os.path.join(BASE_SIMS_DIR, "RelativeShotNoise", "seed161981",
+                                              tau, amp_cv, sigma, "BlueConfig"))
+                results.append(main(sim))
+    df = pd.concat(results, axis=0, ignore_index=True)
+    df.drop(columns=["t_start", "t_end"], inplace=True)
+    plot_heatmap_grid(df, os.path.join(FIGS_DIR, "RelativeShotNoise.png"))
 
 
 
