@@ -38,12 +38,39 @@ def plot_vm_dist_spect(v, mean, std, spiking, f, pxx, coeffs, freq_window, fig_n
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
+
+
+def plot_heatmap_line(df, value_col, fig_name):
+    """Plots heatmaps on a line (row as an extra var. on top of mean and std.)
+    (-> used for OU, which has tau as extra parameters atm.)"""
+    vmin, vmax = df[value_col].min(), df[value_col].max()
+    taus = df["tau"].unique()
+    fig = plt.figure(figsize=(20, 4))
+    gs = gridspec.GridSpec(1, len(taus) + 1, width_ratios=[10 for _ in range(len(taus))] + [1])
+    for i, tau in enumerate(taus):
+        ax = fig.add_subplot(gs[i])
+        idx = df.loc[df["tau"] == tau].index
+        df_plot = df.loc[idx].pivot(index="std", columns="mean", values=value_col)
+        df_annot = df.loc[idx].pivot(index="std", columns="mean", values="rate")
+        show_annots = df_annot.to_numpy() > 0.
+        if i == 0:
+            sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", ax=ax,
+                        cbar_ax=fig.add_subplot(gs[:, -1]), cbar_kws={"label": value_col})
+        else:
+            sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", cbar=False, ax=ax)
+            ax.set_ylabel("")
+        for text, show_annot in zip(ax.texts, (element for row in show_annots for element in row)):
+            text.set_visible(show_annot)
+        ax.set_title("tau = %.1f" % tau)
+        fig.tight_layout()
+        fig.savefig(fig_name, bbox_inches="tight", dpi=300)
+        plt.close(fig)
     
     
-def plot_heatmap_grid(df, fig_name):
+def plot_heatmap_grid(df, value_col, fig_name):
     """Plots heatmaps on grid (row and col as extra vars. on top of mean and std.)
-    (-> used for shot noise, which has ampCV and tau atm.)"""
-    vmin, vmax = df["V_mean"].min(), df["V_mean"].max()
+    (-> used for shot noise, which has ampCV and tau as extra parameters atm.)"""
+    vmin, vmax = df[value_col].min(), df[value_col].max()
     amp_cvs = df["amp_cv"].unique()
     taus = df["tau"].unique()
     fig = plt.figure(figsize=(20, 8))
@@ -51,13 +78,17 @@ def plot_heatmap_grid(df, fig_name):
     for i, tau in enumerate(taus):
         for j, amp_cv in enumerate(amp_cvs):
             ax = fig.add_subplot(gs[i, j])
-            df_tmp = df.loc[(df["amp_cv"] == amp_cv) & (df["tau"] == tau)].pivot(
-                     index="std", columns="mean", values="V_mean")
+            idx = df.loc[(df["amp_cv"] == amp_cv) & (df["tau"] == tau)].index
+            df_plot = df.loc[idx].pivot(index="std", columns="mean", values=value_col)
+            df_annot = df.loc[idx].pivot(index="std", columns="mean", values="rate")
+            show_annots = df_annot.to_numpy() > 0.
             if i == 0 and j == 0:
-                sns.heatmap(df_tmp, cmap="viridis", vmin=vmin, vmax=vmax, ax=ax,
-                            cbar_ax=fig.add_subplot(gs[:, -1]), cbar_kws={"label": "mean V_m (mV)"})
+                sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", ax=ax,
+                            cbar_ax=fig.add_subplot(gs[:, -1]), cbar_kws={"label": value_col})
             else:
-                sns.heatmap(df_tmp, cmap="viridis", vmin=vmin, vmax=vmax, cbar=False, ax=ax)
+                sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", cbar=False, ax=ax)
+            for text, show_annot in zip(ax.texts, (element for row in show_annots for element in row)):
+                text.set_visible(show_annot)
             if i == 0:
                 ax.set_title("ampCV = %.2f" % amp_cv)
             if i != len(taus) - 1:
