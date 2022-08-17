@@ -18,17 +18,17 @@ def plot_vm_dist_spect(v, mean, std, spiking, f, pxx, coeffs, freq_window, fig_n
     fig = plt.figure(figsize=(10, 6.5))
     ax = fig.add_subplot(1, 2, 1)
     col = "red" if spiking else "blue"
-    ax.hist(v, bins=30, range=[-80, -50], color=col, label="%.2f+/-%.2f" % (mean, std))
-    ax.set_xlim([-80, -50])
+    ax.hist(v[v < -55], bins=30, color=col, label="%.2f+/-%.2f" % (mean, std))  # -55 is a rather arbitrary threshold
+    # ax.set_xlim([-80, -50])
     ax.set_xlabel("V_m (mV)")
     ax.legend(frameon=False)
     ax2 = fig.add_subplot(1, 2, 2)
     ax2.plot(f, pxx, color="black")
-    # TODO: fix this part...
-    #idx = np.where((freq_window[0] < f) & (f < freq_window[1]))[0]
-    #fit = np.polyval(coeffs, np.log10(f[idx]))
-    #ax2.plot(f[idx], fit, color="red", label="alpha=%.2f" % np.abs(coeffs[0]))
-    #ax2.legend(frameon=False)
+    if not spiking:
+        idx = np.where((freq_window[0] < f) & (f < freq_window[1]))[0]
+        fit = np.polyval(coeffs, np.log10(f[idx]))
+        ax2.plot(f[idx], 10**fit, color="red", label="alpha=%.2f" % np.abs(coeffs[0]))
+        ax2.legend(frameon=False)
     plt.xscale("log")
     plt.yscale("log")
     ax2.set_xlabel("Frequency (Hz)")

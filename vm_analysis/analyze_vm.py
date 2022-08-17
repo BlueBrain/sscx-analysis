@@ -35,7 +35,7 @@ def analyze_v_spectrum(v, fs, freq_window):
     return f, pxx, coeffs
 
 
-def main(sim, freq_window=[100, 10000], plot_results=True):
+def main(sim, t_start_offset=300, freq_window=[10, 5000], plot_results=True):
     # load report with bluepy
     report = sim.report("soma")
     fs = 1 / (report.meta["time_step"] / 1000)
@@ -47,7 +47,7 @@ def main(sim, freq_window=[100, 10000], plot_results=True):
     stims = parse_stim_blocks(sim.config)
     results_dict = {}
     for row_id, stim in stims.iterrows():
-        v_window = v[(stim["t_start"] < t) & (t <= stim["t_end"])]
+        v_window = v[(stim["t_start"] + t_start_offset < t) & (t <= stim["t_end"])]
         mean, std, normal, spiking = analyze_v_dist(v_window)
         f, pxx, coeffs = analyze_v_spectrum(v_window, fs, freq_window)
         results_dict[row_id] = [mean, std, normal, spiking, coeffs[0]]
@@ -56,6 +56,7 @@ def main(sim, freq_window=[100, 10000], plot_results=True):
             plot_vm_dist_spect(v_window, mean, std, spiking, f, pxx, coeffs, freq_window, fig_name)
     results = pd.DataFrame.from_dict(results_dict, orient="index",
                                      columns=["V_mean", "V_std", "V_normal", "V_spiking", "PSD_slope"])
+    results.loc[results["V_spiking"] == True, "PSD_slope"] = np.nan
     return pd.concat([stims, results], axis=1)
 
 
