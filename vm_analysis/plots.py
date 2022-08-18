@@ -101,3 +101,12 @@ def plot_heatmap_grid(df, value_col, fig_name):
     fig.savefig(fig_name, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
+
+def plot_corrs(df, var_cols, value_cols, fig_name):
+    """Plot correlations for input variables and output features"""
+    grid = sns.PairGrid(data=df, x_vars=var_cols, y_vars=value_cols)
+    grid.fig.set_size_inches(10, 6.5)
+    grid.map_diag(sns.histplot, element="step")
+    grid.map_offdiag(sns.kdeplot, bw_method="silverman", gridsize=100)
+    grid.tight_layout()
+    grid.savefig(fig_name, dpi=100, bbox_inches="tight")

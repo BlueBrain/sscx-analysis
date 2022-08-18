@@ -11,11 +11,11 @@ from scipy.signal import welch
 import pandas as pd
 from bluepy import Simulation
 from utils import parse_stim_blocks, stim2str
-from plots import plot_vm_dist_spect, plot_heatmap_line, plot_heatmap_grid
+from plots import plot_vm_dist_spect, plot_heatmap_line, plot_heatmap_grid, plot_corrs
 
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
 SIGN_TH = 0.1  # alpha level for significance tests
-FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/sscx-analysis/vm_analysis"
+FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/vm_analysis"
 BASE_SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/singlecell/L5TPC_exemplar/Current/"
 
 
@@ -68,25 +68,48 @@ if __name__ == "__main__":
     results = []
     for tau in ["tau_fast", "tau_slow"]:
         for amp_cv in ["ampcv0.25", "ampcv0.5", "ampcv0.75", "ampcv1.0", "ampcv1.25"]:
+            for sigma in ["sigma0.010", "sigma0.020", "sigma0.030", "sigma0.040",
+                          "sigma0.050", "sigma0.060", "sigma0.070"]:
+                sim = Simulation(os.path.join(BASE_SIMS_DIR, "AbsoluteShotNoise", "seed161981",
+                                              tau, amp_cv, sigma, "BlueConfig"))
+                results.append(main(sim))
             for sigma in ["sigma10", "sigma15", "sigma20", "sigma25", "sigma30"]:
                 sim = Simulation(os.path.join(BASE_SIMS_DIR, "RelativeShotNoise", "seed161981",
                                               tau, amp_cv, sigma, "BlueConfig"))
                 results.append(main(sim))
-    df = pd.concat(results, axis=0, ignore_index=True)
-    df.drop(columns=["t_start", "t_end"], inplace=True)
-    plot_heatmap_grid(df, "V_mean", os.path.join(FIGS_DIR, "RelativeShotNoise_V_mean.png"))
-    plot_heatmap_grid(df, "V_std", os.path.join(FIGS_DIR, "RelativeShotNoise_V_std.png"))
-    results = []
     for tau in ["tau1", "tau2.5", "tau4", "tau5.5", "tau7"]:
+        for sigma in ["sigma0.010", "sigma0.020", "sigma0.030", "sigma0.040",
+                      "sigma0.050", "sigma0.060", "sigma0.070"]:
+            sim = Simulation(os.path.join(BASE_SIMS_DIR, "OrnsteinUhlenbeck", "seed161981",
+                                          tau, sigma, "BlueConfig"))
+            results.append(main(sim))
         for sigma in ["sigma10", "sigma15", "sigma20", "sigma25", "sigma30"]:
             sim = Simulation(os.path.join(BASE_SIMS_DIR, "RelativeOrnsteinUhlenbeck", "seed161981",
                                           tau, sigma, "BlueConfig"))
             results.append(main(sim))
-            print(results)
     df = pd.concat(results, axis=0, ignore_index=True)
-    df.drop(columns=["t_start", "t_end", "amp_cv"], inplace=True)
-    plot_heatmap_line(df, "V_mean", os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeck_V_mean.png"))
-    plot_heatmap_line(df, "V_std", os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeck_V_std.png"))
+    df.drop(columns=["t_start", "t_end"], inplace=True)
+    df.to_pickle("vm.pkl")
+
+    plot_heatmap_grid(df.loc[df["pattern"] == "AbsoluteShotNoise"], "V_mean",
+                      os.path.join(FIGS_DIR, "AbsoluteShotNoiseCurrent_V_mean.png"))
+    plot_heatmap_grid(df.loc[df["pattern"] == "AbsoluteShotNoise"], "V_std",
+                      os.path.join(FIGS_DIR, "AbsoluteShotNoiseCurrent_V_std.png"))
+    plot_heatmap_grid(df.loc[df["pattern"] == "RelativeShotNoise"], "V_mean",
+                      os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_V_mean.png"))
+    plot_heatmap_grid(df.loc[df["pattern"] == "RelativeShotNoise"], "V_std",
+                      os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_V_std.png"))
+    plot_corrs(df.loc[df["pattern"] == "RelativeShotNoise"], ["mean", "std", "amp_cv", "tau"],
+               ["V_mean", "V_std"], os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_corrs.png"))
+    plot_heatmap_line(df.loc[df["pattern"] == "AbsoluteOrnsteinUhlenbeck"], "V_mean",
+                      os.path.join(FIGS_DIR, "AbsoluteOrnsteinUhlenbeckCurrent_V_mean.png"))
+    plot_heatmap_line(df.loc[df["pattern"] == "AbsoluteOrnsteinUhlenbeck"], "V_std",
+                      os.path.join(FIGS_DIR, "AbsoluteOrnsteinUhlenbeckCurrent_V_std.png"))
+    plot_heatmap_line(df.loc[df["pattern"] == "RelativeOrnsteinUhlenbeck"], "V_mean",
+                      os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckCurrent_V_mean.png"))
+    plot_heatmap_line(df.loc[df["pattern"] == "RelativeOrnsteinUhlenbeck"], "V_std",
+                      os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckCurrent_V_std.png"))
+
 
 
 
