@@ -12,7 +12,7 @@ from scipy.signal import welch
 import pandas as pd
 from bluepy import Simulation
 from utils import parse_stim_blocks, stim2str
-from plots import plot_vm_dist_spect, plot_heatmap_line, plot_heatmap_grid, plot_corrs
+from plots import plot_vm_dist_spect, plot_heatmap, plot_heatmap_line, plot_heatmap_grid, plot_corrs
 
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
 SIGN_TH = 0.05  # alpha level for significance tests
@@ -60,11 +60,11 @@ def analyze_v_spectrum(v, fs, freq_window):
     return f, pxx, coeffs
 
 
-def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "amp_cv", "mtype", "etype"],
-                 feature_cols=["V_mean", "V_std", "rate"], mi=False):
+def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "amp_cv", "mtype"],
+                 feature_cols=["V_mean", "V_std", "rate"]):
     """Pools results (e.g. from different seeds or gids) and report their mean"""
-    agg_df = df.groupby(input_cols)[feature_cols].agg("mean")
-    return agg_df if mi else agg_df.reset_index()
+    agg_df = df.groupby(input_cols, as_index=False)[feature_cols].agg("mean")
+    return agg_df.loc[~agg_df.isnull().any(axis=1)]
 
 
 def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 5000], plot_results=False):
@@ -108,27 +108,24 @@ if __name__ == "__main__":
         results.append(main(sim, freq_window=None))
         sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
                                       "Conductance", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
-
+        results.append(main(sim, freq_window=None))
     for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
         sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
                                       "Current", "RelativeOrnsteinUhlenbeck_E", "tau3", std, "BlueConfig"))
         results.append(main(sim, freq_window=None))
         sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
                                       "Current", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
+        results.append(main(sim, freq_window=None))
     df = pd.concat(results, axis=0, ignore_index=True)
-    # df.to_pickle("vm.pkl")
+    df.to_pickle("vm.pkl")
     df = pool_results(df.drop(columns=["t_start", "t_end"]))
 
-    for mtype in res["mtype"].unique().to_numpy():
+    for mtype in df["mtype"].unique().to_numpy():
         for pattern in ["RelativeShotNoise", "RelativeOrnsteinUhlenbeck"]:
             for mode in ["Current", "Conductance"]:
                 df_plot = df.loc[(df["pattern"] == pattern) & (df["mode"] == mode) & (df["mtype"] == mtype)]
-                if "ShotNoise" in pattern:
-                    plot_heatmap_grid(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_%s_V_mean.png" % (mtype, pattern, mode)))
-                    plot_heatmap_grid(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_%s_V_std.png" % (mtype, pattern, mode)))
-                else:
-                    plot_heatmap_line(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_%s_V_mean.png" % (mtype, pattern, mode)))
-                    plot_heatmap_line(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_%s_V_std.png" % (mtype, pattern, mode)))
+                plot_heatmap(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_%s_V_mean.png" % (mtype, pattern, mode)))
+                plot_heatmap(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_%s_V_std.png" % (mtype, pattern, mode)))
 
 
 

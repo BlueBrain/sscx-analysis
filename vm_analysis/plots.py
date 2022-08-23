@@ -40,6 +40,20 @@ def plot_vm_dist_spect(v, mean, std, rate, f, pxx, coeffs, freq_window, fig_name
     plt.close(fig)
 
 
+def plot_heatmap(df, value_col, fig_name):
+    """Plots single heatmap"""
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    df_plot = df.pivot(index="std", columns="mean", values=value_col)
+    df_annot = df.pivot(index="std", columns="mean", values="rate")
+    show_annots = df_annot.to_numpy() > 0.
+    sns.heatmap(df_plot, cmap="viridis", annot=df_annot, fmt=".1f", ax=ax, cbar_kws={"label": value_col})
+    for text, show_annot in zip(ax.texts, (element for row in show_annots for element in row)):
+        text.set_visible(show_annot)
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 def plot_heatmap_line(df, value_col, fig_name):
     """Plots heatmaps on a line (row as an extra var. on top of mean and std.)
     (-> used for OU, which has tau as extra parameters atm.)"""
