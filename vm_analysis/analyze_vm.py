@@ -5,6 +5,7 @@ author: András Ecker, last update: 08.2022
 """
 
 import os
+from tqdm import tqdm
 import numpy as np
 from scipy.stats import normaltest
 from scipy.signal import welch
@@ -14,7 +15,7 @@ from utils import parse_stim_blocks, stim2str
 from plots import plot_vm_dist_spect, plot_heatmap_line, plot_heatmap_grid, plot_corrs
 
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
-SIGN_TH = 0.1  # alpha level for significance tests
+SIGN_TH = 0.05  # alpha level for significance tests
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/vm_analysis"
 BASE_SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/singlecell/"
 
@@ -22,9 +23,9 @@ BASE_SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/sin
 def analyze_v_dist(v):
     """Analyzes V_m distribution"""
     v = v[v < SIGN_TH]  # get rid of spikes
-    _, p = normaltest(v)  # there are a bunch of other tests for normality...
-    normal = True if p > SIGN_TH else False
-    return np.mean(v), np.std(v), normal
+    # _, p = normaltest(v)  # there are a bunch of other tests for normality...
+    # normal = True if p > SIGN_TH else False
+    return np.mean(v), np.std(v) #, normal
 
 
 def analyze_v_spectrum(v, fs, freq_window):
@@ -35,6 +36,13 @@ def analyze_v_spectrum(v, fs, freq_window):
     coeffs = np.polyfit(np.log10(f[idx]), np.log10(pxx[idx]), deg=1)
     return f, pxx, coeffs
 
+
+def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "amp_cv"],
+                 feature_cols=["V_mean", "V_std", "rate"], mi=False):
+    """Pools results (e.g. from different seeds or gids) and report their mean"""
+    agg_df = df.groupby(input_cols)[feature_cols].agg("mean")
+    return agg_df if mi else agg_df.reset_index()
+    
 
 def main(sim, t_start_offset=200, freq_window=[10, 5000], plot_results=False):
     # load report with bluepy
@@ -47,84 +55,59 @@ def main(sim, t_start_offset=200, freq_window=[10, 5000], plot_results=False):
     spike_times = sim.spikes.get().index.to_numpy()
     # parse stim blocks and iterate over them
     stims = parse_stim_blocks(sim.config)
-    results_dict = {}
-    for row_id, stim in stims.iterrows():
+    results = np.zeros((len(stims), 5), dtype=np.float32)
+    for i, (row_id, stim) in enumerate(stims.iterrows()):
         t_start, t_end = stim["t_start"] + t_start_offset, stim["t_end"]
         rate = len(spike_times[(t_start < spike_times) & (spike_times <= t_end)]) / ((t_end - t_start) / 1000)
         v_window = v[(t_start < t) & (t <= t_end)]
-        mean, std, normal = analyze_v_dist(v_window)
-        f, pxx, coeffs = analyze_v_spectrum(v_window, fs, freq_window)
-        results_dict[row_id] = [mean, std, normal, rate, coeffs[0]]
-        if plot_results:
-            fig_name = os.path.join(FIGS_DIR, "individual", "%s.png" % stim2str(stim))
-            plot_vm_dist_spect(v_window, mean, std, spiking, f, pxx, coeffs, freq_window, fig_name)
-    results = pd.DataFrame.from_dict(results_dict, orient="index",
-                                     columns=["V_mean", "V_std", "V_normal", "rate", "PSD_slope"])
-    results.loc[results["rate"] == 0., "PSD_slope"] = np.nan
+        mean, std = analyze_v_dist(v_window)
+        if freq_window is not None:
+            f, pxx, coeffs = analyze_v_spectrum(v_window, fs, freq_window)
+            if plot_results:
+                fig_name = os.path.join(FIGS_DIR, "individual", "%s.png" % stim2str(stim))
+                plot_vm_dist_spect(v_window, mean, std, spiking, f, pxx, coeffs, freq_window, fig_name)
+            results[i, :] = [row_id, mean, std, rate, coeffs[0]]
+        else:
+            results[i, :-1] = [row_id, mean, std, rate]
+    if freq_window is not None:
+        results[results[:, 3] == 0., 4] = np.nan  # only keep fits to subth. traces
+        results = pd.DataFrame(data=results[:, 1:], index=results[:, 0].astype(int),
+                               columns=["V_mean", "V_std", "rate", "PSD_slope"])
+    else:
+        results = pd.DataFrame(data=results[:, 1:-1], index=results[:, 0].astype(int),
+                               columns=["V_mean", "V_std", "rate"])
     return pd.concat([stims, results], axis=1)
 
 
 if __name__ == "__main__":
     results = []
-    for tau in ["tau1", "tau2.5", "tau4", "tau5.5", "tau7"]:
-        for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
-            sim = Simulation(os.path.join(BASE_SIMS_DIR, "singlecell", "seed2997", "a4134424", "Conductance",
-                                          "RelativeOrnsteinUhlenbeck_E", tau, std, "BlueConfig"))
-            results.append(main(sim))
-    df = pd.concat(results, axis=0, ignore_index=True)
-    df.drop(columns=["t_start", "t_end"], inplace=True)
-    plot_heatmap_line(df, "V_mean", os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckConductance_V_mean.png"))
-    plot_heatmap_line(df, "V_std", os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckConductance_V_std.png"))
-    df = pd.concat([df, pd.read_pickle("vm_test.pkl")], axis=0, ignore_index=True)
-    plot_corrs(df.loc[df["pattern"] == "RelativeOrnsteinUhlenbeck"], ["mean", "std", "tau"],
-               ["V_mean", "V_std"], "mode", os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckCurrentConductance_corrs.png"))
+    for std in ["sdperc3", "sdperc6", "sdperc9", "sdperc12", "sdperc15", "sdperc18"]:
+        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
+                                      "Conductance", "RelativeOrnsteinUhlenbeck_E", "tau3", std, "BlueConfig"))
+        results.append(main(sim, freq_window=None))
+        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
+                                      "Conductance", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
 
-
-    '''test sims:
-    results = []
-    for tau in ["tau_fast", "tau_slow"]:
-        for amp_cv in ["ampcv0.25", "ampcv0.5", "ampcv0.75", "ampcv1.0", "ampcv1.25"]:
-            for std in ["sigma0.010", "sigma0.020", "sigma0.030", "sigma0.040",
-                        "sigma0.050", "sigma0.060", "sigma0.070"]:
-                sim = Simulation(os.path.join(BASE_SIMS_DIR, "L5TPC_exemplar", "Current", "AbsoluteShotNoise",
-                                              "seed161981", tau, amp_cv, std, "BlueConfig"))
-                results.append(main(sim))
-            for std in ["sigma10", "sigma15", "sigma20", "sigma25", "sigma30"]:
-                sim = Simulation(os.path.join(BASE_SIMS_DIR, "L5TPC_exemplar", "Current", "RelativeShotNoise",
-                                              "seed161981", tau, amp_cv, std, "BlueConfig"))
-                results.append(main(sim))
-    for tau in ["tau1", "tau2.5", "tau4", "tau5.5", "tau7"]:
-        for std in ["sigma0.010", "sigma0.020", "sigma0.030", "sigma0.040",
-                    "sigma0.050", "sigma0.060", "sigma0.070"]:
-            sim = Simulation(os.path.join(BASE_SIMS_DIR, "L5TPC_exemplar", "Current", "OrnsteinUhlenbeck",
-                                          "seed161981", tau, std, "BlueConfig"))
-            results.append(main(sim))
-        for std in ["sigma10", "sigma15", "sigma20", "sigma25", "sigma30"]:
-            sim = Simulation(os.path.join(BASE_SIMS_DIR, "RelativeOrnsteinUhlenbeck", "L5TPC_exemplar", "Current",
-                                          "seed161981", tau, std, "BlueConfig"))
-            results.append(main(sim))
+    for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
+        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
+                                      "Current", "RelativeOrnsteinUhlenbeck_E", "tau3", std, "BlueConfig"))
+        results.append(main(sim, freq_window=None))
+        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
+                                      "Current", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
     df = pd.concat(results, axis=0, ignore_index=True)
-    df.drop(columns=["t_start", "t_end"], inplace=True)
-    df.to_pickle("vm_test.pkl")
-    plot_heatmap_grid(df.loc[df["pattern"] == "AbsoluteShotNoise"], "V_mean",
-                      os.path.join(FIGS_DIR, "AbsoluteShotNoiseCurrent_V_mean.png"))
-    plot_heatmap_grid(df.loc[df["pattern"] == "AbsoluteShotNoise"], "V_std",
-                      os.path.join(FIGS_DIR, "AbsoluteShotNoiseCurrent_V_std.png"))
-    plot_heatmap_grid(df.loc[df["pattern"] == "RelativeShotNoise"], "V_mean",
-                      os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_V_mean.png"))
-    plot_heatmap_grid(df.loc[df["pattern"] == "RelativeShotNoise"], "V_std",
-                      os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_V_std.png"))
-    plot_corrs(df.loc[df["pattern"] == "RelativeShotNoise"], ["mean", "std", "amp_cv", "tau"],
-               ["V_mean", "V_std"], os.path.join(FIGS_DIR, "RelativeShotNoiseCurrent_corrs.png"))
-    plot_heatmap_line(df.loc[df["pattern"] == "AbsoluteOrnsteinUhlenbeck"], "V_mean",
-                      os.path.join(FIGS_DIR, "AbsoluteOrnsteinUhlenbeckCurrent_V_mean.png"))
-    plot_heatmap_line(df.loc[df["pattern"] == "AbsoluteOrnsteinUhlenbeck"], "V_std",
-                      os.path.join(FIGS_DIR, "AbsoluteOrnsteinUhlenbeckCurrent_V_std.png"))
-    plot_heatmap_line(df.loc[df["pattern"] == "RelativeOrnsteinUhlenbeck"], "V_mean",
-                      os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckCurrent_V_mean.png"))
-    plot_heatmap_line(df.loc[df["pattern"] == "RelativeOrnsteinUhlenbeck"], "V_std",
-                      os.path.join(FIGS_DIR, "RelativeOrnsteinUhlenbeckCurrent_V_std.png"))
-    '''
+    df = pool_results(df.drop(columns=["t_start", "t_end"], inplace=True))
+
+    for pattern in ["RelativeShotNoise", "RelativeOrnsteinUhlenbeck"]:
+        for mode in ["Current", "Conductance"]:
+            df_plot = df.loc[(df["pattern"] == pattern) & (df["mode"] == mode)]
+            if "ShotNoise" in pattern:
+                plot_heatmap_grid(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_V_mean.png" % (pattern, mode)))
+                plot_heatmap_grid(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_V_std.png" % (pattern, mode)))
+            else:
+                plot_heatmap_line(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_V_mean.png" % (pattern, mode)))
+                plot_heatmap_line(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_V_std.png" % (pattern, mode)))
+        plot_corrs(df.loc[df["pattern"] == pattern], ["mean", "std"], ["V_mean", "V_std"], mode, None,
+                   os.path.join(FIGS_DIR, "%s_corrs" % pattern))
 
 
 
