@@ -5,6 +5,7 @@ author: András Ecker, last update: 08.2022
 """
 
 import os
+from tqdm import tqdm
 from copy import deepcopy
 import numpy as np
 from scipy.stats import normaltest
@@ -12,7 +13,7 @@ from scipy.signal import welch
 import pandas as pd
 from bluepy import Simulation
 from utils import parse_stim_blocks, stim2str
-from plots import plot_vm_dist_spect, plot_heatmap, plot_heatmap_line, plot_heatmap_grid, plot_corrs
+from plots import plot_vm_dist_spect, plot_heatmap_grid, plot_corrs
 
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
 SIGN_TH = 0.05  # alpha level for significance tests
@@ -67,7 +68,7 @@ def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "amp_c
     return agg_df.loc[~agg_df.isnull().any(axis=1)]
 
 
-def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 5000], plot_results=False):
+def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_results=False):
     # load reports with bluepy
     report = sim.report("soma")
     fs = 1 / (report.meta["time_step"] / 1000)
@@ -101,31 +102,30 @@ def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 5000], plot_resu
 
 if __name__ == "__main__":
     results = []
-    # TODO: iterate over seeds as well!
-    for std in ["sdperc3", "sdperc6", "sdperc9", "sdperc12", "sdperc15", "sdperc18"]:
-        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
-                                      "Conductance", "RelativeOrnsteinUhlenbeck_E", "tau3", std, "BlueConfig"))
-        results.append(main(sim, freq_window=None))
-        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
-                                      "Conductance", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
-        results.append(main(sim, freq_window=None))
-    for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
-        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
-                                      "Current", "RelativeOrnsteinUhlenbeck_E", "tau3", std, "BlueConfig"))
-        results.append(main(sim, freq_window=None))
-        sim = Simulation(os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196",
-                                      "Current", "RelativeShotNoise_E", "tau0.4_4", "ampcv0.5", std, "BlueConfig"))
-        results.append(main(sim, freq_window=None))
-    df = pd.concat(results, axis=0, ignore_index=True)
+    for seed in tqdm(["seed174345", "seed253057", "seed312643", "seed497313", "seed639057",
+                      "seed654929", "seed777747", "seed852251", "seed966958", "seed983777"]):
+        for std in ["sdperc3", "sdperc6", "sdperc9", "sdperc12", "sdperc15", "sdperc18"]:
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Conductance",
+                              "RelativeOrnsteinUhlenbeck_E", "meanperc3_3", "tau3", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Conductance",
+                              "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+        for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
+                              "RelativeOrnsteinUhlenbeck_E", "meanperc3_3", "tau3", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
+                              "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+    df = pd.concat(results, axis=0, ignore_index=True).drop(columns=["t_start", "t_end"])
     df.to_pickle("vm.pkl")
-    df = pool_results(df.drop(columns=["t_start", "t_end"]))
 
+    agg_df = pool_results(df)
     for mtype in df["mtype"].unique().to_numpy():
-        for pattern in ["RelativeShotNoise", "RelativeOrnsteinUhlenbeck"]:
-            for mode in ["Current", "Conductance"]:
-                df_plot = df.loc[(df["pattern"] == pattern) & (df["mode"] == mode) & (df["mtype"] == mtype)]
-                plot_heatmap(df_plot, "V_mean", os.path.join(FIGS_DIR, "%s_%s_%s_V_mean.png" % (mtype, pattern, mode)))
-                plot_heatmap(df_plot, "V_std", os.path.join(FIGS_DIR, "%s_%s_%s_V_std.png" % (mtype, pattern, mode)))
+        df_plot = agg_df.loc[(agg_df["mtype"] == mtype)]
+        plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype))
+        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", os.path.join(FIGS_DIR, "%s_V_std.png" % mtype))
 
 
 
