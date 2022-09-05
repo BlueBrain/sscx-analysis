@@ -9,7 +9,7 @@ import pandas as pd
 
 def parse_stim_blocks(config):
     """Creates pandas DataFrame from stimulus blocks in a bluepy.Simulation.config object"""
-    stim_dict = {key: [] for key in ["pattern", "mode", "t_start", "t_end", "mean", "std", "tau", "amp_cv"]}
+    stim_dict = {key: [] for key in ["pattern", "mode", "t_start", "t_end", "mean", "std", "tau"]}  #, "amp_cv"]}
     injected_stims = [stim_inj.Stimulus for stim_inj in config.typed_sections("StimulusInject")]
     for stim in config.typed_sections("Stimulus"):
         if stim.name in injected_stims:
@@ -26,7 +26,7 @@ def parse_stim_blocks(config):
                 stim_dict["std"].append(std)
                 tau = float(stim.DecayTime) if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"] else float(stim.Tau)
                 stim_dict["tau"].append(tau)
-                stim_dict["amp_cv"] = float(stim.AmpCV) if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"] else np.nan
+                # stim_dict["amp_cv"] = float(stim.AmpCV) if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"] else -1
     return pd.DataFrame.from_dict(stim_dict)
 
 
@@ -34,8 +34,8 @@ def stim2str(stim):
     pattern = stim["pattern"]
     str = "%s_%s_" % (pattern, stim["mode"])
     str += "Mean%.2f_Std%.2f_Tau%.1f" % (stim["mean"], stim["std"], stim["tau"])
-    if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"]:
-        str += "_AmpCV%.2f" % stim["amp_cv"]
+    # if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"]:
+    #     str += "_AmpCV%.2f" % stim["amp_cv"]
     return str
 
 
