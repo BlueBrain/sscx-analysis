@@ -19,6 +19,9 @@ SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
 SIGN_TH = 0.05  # alpha level for significance tests
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/vm_analysis"
 BASE_SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/bolanos/Bernstein2022/singlecell/"
+EXC_MTYPES = {"L23E": ["L2_IPC", "L2_TPC:A", "L2_TPC:B", "L3_TPC:A", "L3_TPC:C"],
+              "L4E": ["L4_SSC", "L4_TPC", "L4_UPC"], "L5E": ["L5_TPC:A", "L5_TPC:B", "L5_TPC:C", "L5_UPC"],
+              "L6E": ["L6_BPC", "L6_HPC", "L6_IPC", "L6_TPC:A", "L6_TPC:C", "L6_UPC"]}
 
 
 def sample_metypes(c, gids, nsamples):
@@ -61,11 +64,20 @@ def analyze_v_spectrum(v, fs, freq_window):
     return f, pxx, coeffs
 
 
-def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "amp_cv", "mtype"],
+def pool_results(df, input_cols=["pattern", "mode", "mean", "std", "tau", "mtype"],
                  feature_cols=["V_mean", "V_std", "rate"]):
     """Pools results (e.g. from different seeds or gids) and report their mean"""
     agg_df = df.groupby(input_cols, as_index=False)[feature_cols].agg("mean")
     return agg_df.loc[~agg_df.isnull().any(axis=1)]
+
+
+def pool_mtypes(unique_mtypes, mtypes_dict):
+    """Pools `unique_mtypes` based on the `mtypes_dict` passed"""
+    data = np.repeat("other", len(unique_mtypes))
+    for mtype_group, mtypes in mtypes_dict.items():
+        for mtype in mtypes:
+            data[unique_mtypes == mtype] = mtype_group
+    return pd.Series(data=data, index=unique_mtypes)
 
 
 def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_results=False):
@@ -94,7 +106,7 @@ def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_resul
                     plot_vm_dist_spect(v_window[:, i], df.loc[gids.index[i], "V_mean"], df.loc[gids.index[i], "V_std"],
                                        df.loc[gids.index[i], "rate"], f, pxx, coeffs, freq_window, fig_name)
             df["PSD_slope"] = np.abs(psd_slopes)
-            df.loc[df["rate"] == 0., "PSD_slope"] = -1  # only keep fits to subthreshold traces
+            df.loc[df["rate"] > 0., "PSD_slope"] = -1  # only keep fits to subthreshold traces
         results.append(df)
     results = pd.concat(results, ignore_index=True, axis=0)
     return pd.concat([stims.loc[stims.index.repeat(len(gids))].reset_index(drop=True), results], axis=1)
@@ -109,23 +121,46 @@ if __name__ == "__main__":
                               "RelativeOrnsteinUhlenbeck_E", "meanperc3_3", "tau3", std, "BlueConfig")
             results.append(main(Simulation(bc)))
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Conductance",
-                              "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
+                              "RelativeShotNoise_E", "meanperc3_3", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
             results.append(main(Simulation(bc)))
+        # TODO: merge these 2 below once the paths get fixed...
         for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
-                              "RelativeOrnsteinUhlenbeck_E", "meanperc3_3", "tau3", std, "BlueConfig")
+                              "RelativeOrnsteinUhlenbeck_E", "meanperc10_15", "tau3", std, "BlueConfig")
             results.append(main(Simulation(bc)))
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
                               "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+        for std in ["sdperc35", "sdperc40"]:
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
+                              "RelativeOrnsteinUhlenbeck_E", "meanperc10_15", "tau3", std, "BlueConfig")
+            results.append(main(Simulation(bc)))
+            bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
+                              "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "fskew0.5", std, "BlueConfig")
             results.append(main(Simulation(bc)))
     df = pd.concat(results, axis=0, ignore_index=True).drop(columns=["t_start", "t_end"])
     df.to_pickle("vm.pkl")
 
     agg_df = pool_results(df)
-    for mtype in df["mtype"].unique().to_numpy():
+    drop_df = agg_df.loc[(agg_df["mode"] == "Current") & (agg_df["std"].isin([5, 10]))]
+    agg_df.drop(index=drop_df.index, inplace=True)  # get rid of these for consistent plots...
+    mean_min, mean_max = agg_df["V_mean"].quantile(0.01), agg_df["V_mean"].quantile(0.99)
+    std_min, std_max = agg_df["V_std"].quantile(0.01), agg_df["V_std"].quantile(0.99)
+    mtypes = agg_df["mtype"].unique().to_numpy()
+    agg_df["mtype_group"] = pool_mtypes(mtypes, EXC_MTYPES).loc[agg_df["mtype"]].to_numpy()
+    for mtype_group in list(EXC_MTYPES.keys()) + ["other"]:
+        df_plot = agg_df.loc[(agg_df["mtype_group"] == mtype_group)]
+        plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", mean_min, mean_max, "viridis",
+                          os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype_group))
+        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "plasma",
+                          os.path.join(FIGS_DIR, "%s_V_std.png" % mtype_group))
+    for mtype in mtypes:
         df_plot = agg_df.loc[(agg_df["mtype"] == mtype)]
-        plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype))
-        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", os.path.join(FIGS_DIR, "%s_V_std.png" % mtype))
+        plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", mean_min, mean_max, "viridis",
+                          os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype))
+        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "plasma",
+                          os.path.join(FIGS_DIR, "%s_V_std.png" % mtype))
+
 
 
 
