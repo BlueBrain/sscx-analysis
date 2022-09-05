@@ -106,7 +106,7 @@ def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_resul
                     plot_vm_dist_spect(v_window[:, i], df.loc[gids.index[i], "V_mean"], df.loc[gids.index[i], "V_std"],
                                        df.loc[gids.index[i], "rate"], f, pxx, coeffs, freq_window, fig_name)
             df["PSD_slope"] = np.abs(psd_slopes)
-            df.loc[df["rate"] > 0., "PSD_slope"] = -1  # only keep fits to subthreshold traces
+            # df.loc[df["rate"] > 0., "PSD_slope"] = -1  # only keep fits to subthreshold traces
         results.append(df)
     results = pd.concat(results, ignore_index=True, axis=0)
     return pd.concat([stims.loc[stims.index.repeat(len(gids))].reset_index(drop=True), results], axis=1)
@@ -144,22 +144,24 @@ if __name__ == "__main__":
     agg_df = pool_results(df)
     drop_df = agg_df.loc[(agg_df["mode"] == "Current") & (agg_df["std"].isin([5, 10]))]
     agg_df.drop(index=drop_df.index, inplace=True)  # get rid of these for consistent plots...
-    mean_min, mean_max = agg_df["V_mean"].quantile(0.01), agg_df["V_mean"].quantile(0.99)
-    std_min, std_max = agg_df["V_std"].quantile(0.01), agg_df["V_std"].quantile(0.99)
+    mean_min, mean_max = -85, -65  # agg_df["V_mean"].quantile(0.01), agg_df["V_mean"].quantile(0.99)
+    std_min, std_max = 0, 9  # agg_df["V_std"].quantile(0.01), agg_df["V_std"].quantile(0.99)
     mtypes = agg_df["mtype"].unique().to_numpy()
     agg_df["mtype_group"] = pool_mtypes(mtypes, EXC_MTYPES).loc[agg_df["mtype"]].to_numpy()
     for mtype_group in list(EXC_MTYPES.keys()) + ["other"]:
         df_plot = agg_df.loc[(agg_df["mtype_group"] == mtype_group)]
         plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", mean_min, mean_max, "viridis",
                           os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype_group))
-        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "plasma",
+        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "magma",
                           os.path.join(FIGS_DIR, "%s_V_std.png" % mtype_group))
+    '''
     for mtype in mtypes:
         df_plot = agg_df.loc[(agg_df["mtype"] == mtype)]
         plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", mean_min, mean_max, "viridis",
                           os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype))
-        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "plasma",
+        plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "magma",
                           os.path.join(FIGS_DIR, "%s_V_std.png" % mtype))
+    '''
 
 
 
