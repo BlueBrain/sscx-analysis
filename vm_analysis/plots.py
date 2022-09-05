@@ -40,24 +40,23 @@ def plot_vm_dist_spect(v, mean, std, rate, f, pxx, coeffs, freq_window, fig_name
     plt.close(fig)
 
     
-def plot_heatmap_grid(df, var, row_var, col_var, annot_var, fig_name):
+def plot_heatmap_grid(df, var, row_var, col_var, annot_var, vmin, vmax, cmap, fig_name):
     """Plots annotated heatmaps on a grid (row and col as extra vars. on top of mean and std.)"""
-    vmin, vmax = df[var].min(), df[var].max()
     rows, cols = df[row_var].unique(), df[col_var].unique()
-    fig = plt.figure(figsize=(20, 8))
+    fig = plt.figure(figsize=(10, 7))  # (20, 8))
     gs = gridspec.GridSpec(len(rows), len(cols)+1, width_ratios=[10 for _ in range(len(cols))] + [1])
     for i, row_val in enumerate(rows):
         for j, col_val in enumerate(cols):
             ax = fig.add_subplot(gs[i, j])
             idx = df.loc[(df[col_var] == col_val) & (df[row_var] == row_val)].index
-            df_plot = df.loc[idx].pivot(index="std", columns="mean", values=var)
-            df_annot = df.loc[idx].pivot(index="std", columns="mean", values="rate")
-            show_annots = df_annot.to_numpy() > 0.
+            df_plot = df.loc[idx].pivot_table(index="mean", columns="std", values=var, aggfunc="mean")
+            df_annot = df.loc[idx].pivot_table(index="mean", columns="std", values="rate", aggfunc="mean")
+            show_annots = df_annot.to_numpy() > 0.01
             if i == 0 and j == 0:
-                sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", ax=ax,
+                sns.heatmap(df_plot, cmap=cmap, vmin=vmin, vmax=vmax, annot=df_annot, fmt=".2f", ax=ax,
                             cbar_ax=fig.add_subplot(gs[:, -1]), cbar_kws={"label": var})
             else:
-                sns.heatmap(df_plot, cmap="viridis", vmin=vmin, vmax=vmax, annot=df_annot, fmt=".1f", cbar=False, ax=ax)
+                sns.heatmap(df_plot, cmap=cmap, vmin=vmin, vmax=vmax, annot=df_annot, fmt=".2f", cbar=False, ax=ax)
             for text, show_annot in zip(ax.texts, (element for row in show_annots for element in row)):
                 text.set_visible(show_annot)
             if i == 0:
