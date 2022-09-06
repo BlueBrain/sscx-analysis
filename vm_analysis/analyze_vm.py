@@ -141,6 +141,14 @@ if __name__ == "__main__":
     df = pd.concat(results, axis=0, ignore_index=True).drop(columns=["t_start", "t_end"])
     df.to_pickle("vm_replay.pkl")
 
+    mean_min, mean_max = df["V_mean"].quantile(0.01), df["V_mean"].quantile(0.99)
+    std_min, std_max = df["V_std"].quantile(0.01), df["V_std"].quantile(0.99)
+    df_plot = df.loc[(df["vpm_rate"].isna()) & (df["wm_rate"].isna())]
+    plot_heatmap_grid(df_plot, "V_mean", "local_rate", "pre_frac", "rate", mean_min, mean_max, "viridis",
+                      os.path.join(FIGS_DIR, "replay_V_mean.png"))
+    plot_heatmap_grid(df_plot, "V_std", "local_rate", "pre_frac", "rate", std_min, std_max, "magma",
+                      os.path.join(FIGS_DIR, "replay_V_std.png"))
+
     '''
     for seed in tqdm(["seed174345", "seed253057", "seed312643", "seed497313", "seed639057",
                       "seed654929", "seed777747", "seed852251", "seed966958", "seed983777"]):
