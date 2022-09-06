@@ -3,6 +3,7 @@ SSCx sims related utility functions
 author: András Ecker, last update: 08.2022
 """
 
+import json
 import numpy as np
 import pandas as pd
 
@@ -28,6 +29,29 @@ def parse_stim_blocks(config):
                 stim_dict["tau"].append(tau)
                 # stim_dict["amp_cv"] = float(stim.AmpCV) if pattern in ["AbsoluteShotNoise", "RelativeShotNoise"] else -1
     return pd.DataFrame.from_dict(stim_dict)
+
+
+def repeat_stim_block(stim_dict, nreps):
+    """Creates pandas DataFrame with fixed stimulus block values
+    (used to create empty stim blocks and then merge with the rest)"""
+    return pd.DataFrame.from_dict({key: [val for _ in range(nreps)] for key, val in stim_dict.items()})
+
+
+def parse_replay_config(jsonf_name):
+    """Creates pandas DataFrame from saved JSON config with info about spike replay"""
+    with open(jsonf_name, "r") as f:
+        data = json.load(f)
+    replay_dict = {key: [] for key in ["t_start", "t_end", "pre_frac"]}
+    ca, sources, rates, fracs = data["calcium"], data["replay_sources"], data["pre_rate_exc"], data["pre_frac_exc"]
+    for i, stim_times in enumerate(data["stim_windows"]):
+        replay_dict["t_start"].append(float(stim_times["tmin"]))
+        replay_dict["t_end"].append(float(stim_times["tmax"]))
+        replay_dict["pre_frac"].append(fracs[i])
+    replays = pd.DataFrame.from_dict(replay_dict)
+    for source, rate in zip(sources, rates):
+        replays["%s_rate" % source] = float(rate)
+    replays["ca"] = ca
+    return replays
 
 
 def stim2str(stim):

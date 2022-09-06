@@ -5,6 +5,7 @@ author: András Ecker, last update: 08.2022
 """
 
 import os
+import warnings
 from tqdm import tqdm
 from copy import deepcopy
 import numpy as np
@@ -12,9 +13,10 @@ from scipy.stats import normaltest
 from scipy.signal import welch
 import pandas as pd
 from bluepy import Simulation
-from utils import parse_stim_blocks, stim2str
+from utils import parse_stim_blocks, parse_replay_config, repeat_stim_block, stim2str
 from plots import plot_vm_dist_spect, plot_heatmap_grid, plot_corrs
 
+warnings.simplefilter("ignore")
 SPIKE_TH = -30  # mV (NEURON's built in spike threshold)
 SIGN_TH = 0.05  # alpha level for significance tests
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/vm_analysis"
@@ -26,9 +28,12 @@ EXC_MTYPES = {"L23E": ["L2_IPC", "L2_TPC:A", "L2_TPC:B", "L3_TPC:A", "L3_TPC:C"]
 
 def sample_metypes(c, gids, nsamples):
     """Samples `nsamples` (or as many as possible) gids for all me_types"""
-    df = c.cells.get(gids, ["mtype", "etype"]).reset_index()
-    # replace=True and then .unique() is just a workaround to sample as many as there is from the given group...
-    sample_gids = df.groupby(["mtype", "etype"]).sample(n=nsamples, replace=True)["index"].unique()
+    if len(gids) > 1:
+        df = c.cells.get(gids, ["mtype", "etype"]).reset_index()
+        # replace=True and then .unique() is just a workaround to sample as many as there is from the given group...
+        sample_gids = df.groupby(["mtype", "etype"]).sample(n=nsamples, replace=True)["index"].unique()
+    else:
+        sample_gids = gids
     return c.cells.get(sample_gids, ["mtype", "etype"]).sort_index()
 
 
@@ -80,8 +85,9 @@ def pool_mtypes(unique_mtypes, mtypes_dict):
     return pd.Series(data=data, index=unique_mtypes)
 
 
-def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_results=False):
+def main(bc, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_results=False):
     # load reports with bluepy
+    sim = Simulation(bc)
     report = sim.report("soma")
     fs = 1 / (report.meta["time_step"] / 1000)
     gids = sample_metypes(sim.circuit, report.gids, nsamples)
@@ -90,6 +96,13 @@ def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_resul
     spike_times, spiking_gids = get_spikes(sim, gids.index.to_numpy())
     # parse stim blocks and iterate over them
     stims = parse_stim_blocks(sim.config)
+    if len(stims["mean"].unique()) == 1:  # a good indication of a replay sim...
+        replays = parse_replay_config(os.path.join(os.path.split(bc)[0], "config.json"))
+        stims = stims.merge(replays, how="inner", on=["t_start", "t_end"])
+    elif len(stims["mean"].unique()) == 0:  # a good indiction of a replay sim with no stimulus on top...
+        replays = parse_replay_config(os.path.join(os.path.split(bc)[0], "config.json"))
+        stims = pd.concat((repeat_stim_block({"pattern": "RelativeShotNoise", "mode": "Current",
+                                              "mean": 0., "std": 0., "tau": 4.}, len(replays)), replays), axis=1)
     results = []
     for _, stim in stims.iterrows():
         t_start, t_end = stim["t_start"] + t_start_offset, stim["t_end"]
@@ -114,30 +127,45 @@ def main(sim, nsamples=10, t_start_offset=200, freq_window=[10, 500], plot_resul
 
 if __name__ == "__main__":
     results = []
+    for sources in tqdm(["local", "local_pom_vpm", "local_pom_vpm_wm", "local_wm"]):
+        for rate in [0.25, 0.5, 0.75, 1.0, 1.5, 2.0]:
+            rate_str = "rate%s" % rate + "_%s" % rate * sources.count('_')  # stupid naming...
+            base_bc = os.path.join(BASE_SIMS_DIR, "exemplars", "seed6666", "a2800832", "replay_E", sources, "ca1.2",
+                                   "frac0.1_0.1", rate_str, "BlueConfig")
+            results.append(main(base_bc))
+            for mean in ["meanperc30_0", "meanperc45_0", "meanperc60_0", "meanperc75_0"]:
+                for std in ["sdperc10", "sdperc20", "sdperc30"]:
+                    bc = os.path.join(os.path.split(base_bc)[0], "Current", "RelativeShotNoise_E", mean,
+                                      "tau0.4_4", "fskew0.9", std, "BlueConfig")
+                    results.append(main(bc))
+    df = pd.concat(results, axis=0, ignore_index=True).drop(columns=["t_start", "t_end"])
+    df.to_pickle("vm_replay.pkl")
+
+    '''
     for seed in tqdm(["seed174345", "seed253057", "seed312643", "seed497313", "seed639057",
                       "seed654929", "seed777747", "seed852251", "seed966958", "seed983777"]):
         for std in ["sdperc3", "sdperc6", "sdperc9", "sdperc12", "sdperc15", "sdperc18"]:
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Conductance",
                               "RelativeOrnsteinUhlenbeck_E", "meanperc3_3", "tau3", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Conductance",
                               "RelativeShotNoise_E", "meanperc3_3", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
         # TODO: merge these 2 below once the paths get fixed...
         for std in ["sdperc5", "sdperc10", "sdperc15", "sdperc20", "sdperc25", "sdperc30"]:
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
                               "RelativeOrnsteinUhlenbeck_E", "meanperc10_15", "tau3", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
                               "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "ampcv0.5", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
         for std in ["sdperc35", "sdperc40"]:
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
                               "RelativeOrnsteinUhlenbeck_E", "meanperc10_15", "tau3", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
             bc = os.path.join(BASE_SIMS_DIR, "mtype_sample", "seed174345", "unique_emorphos_0.1_8196", "Current",
                               "RelativeShotNoise_E", "meanperc10_15", "tau0.4_4", "fskew0.5", std, "BlueConfig")
-            results.append(main(Simulation(bc)))
+            results.append(main(bc))
     df = pd.concat(results, axis=0, ignore_index=True).drop(columns=["t_start", "t_end"])
     df.to_pickle("vm.pkl")
 
@@ -154,7 +182,7 @@ if __name__ == "__main__":
                           os.path.join(FIGS_DIR, "%s_V_mean.png" % mtype_group))
         plot_heatmap_grid(df_plot, "V_std", "mode", "pattern", "rate", std_min, std_max, "magma",
                           os.path.join(FIGS_DIR, "%s_V_std.png" % mtype_group))
-    '''
+
     for mtype in mtypes:
         df_plot = agg_df.loc[(agg_df["mtype"] == mtype)]
         plot_heatmap_grid(df_plot, "V_mean", "mode", "pattern", "rate", mean_min, mean_max, "viridis",
