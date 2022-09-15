@@ -350,15 +350,23 @@ def plot_rate_vs_change(df, report_name, fig_name):
     """Plots total changes (of mean per connection)
     vs. (well it's just a histogram, not scatter plot....) mean pairwise firing rates"""
     max_rate = df["pw_rate"].quantile(0.999)
+    dep_hist, bin_edges = numba_hist(df.loc[df["delta"] < 0, "pw_rate"].to_numpy(), 30, (0, max_rate))
+    pot_hist, _ = numba_hist(df.loc[df["delta"] > 0, "pw_rate"].to_numpy(), 30, (0, max_rate))
+    unch_hist, _ = numba_hist(df.loc[df["delta"] == 0, "pw_rate"].to_numpy(), 30, (0, max_rate))
+    norms = pot_hist + dep_hist + unch_hist
+    dep_hist, pot_hist, unch_hist = 100 * dep_hist / norms, 100 * pot_hist / norms, 100 * unch_hist / norms
+    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    width = bin_centers[1] - bin_centers[0]
     fig = plt.figure(figsize=(10, 6.5))
     ax = fig.add_subplot(1, 1, 1)
-    ax.hist([df.loc[df["delta"] < 0, "pw_rate"].to_numpy(),df.loc[df["delta"] > 0, "pw_rate"].to_numpy(),
-             df.loc[df["delta"] == 0, "pw_rate"].to_numpy()], bins=30, range=(0, max_rate),
-            color=[BLUE, RED, "lightgray"], stacked=True)
+    ax.bar(bin_centers, dep_hist, color=BLUE, width=width, edgecolor="white", lw=0.5)
+    ax.bar(bin_centers, unch_hist, bottom=dep_hist, color="lightgray", width=width, edgecolor="white", lw=0.5)
+    ax.bar(bin_centers, pot_hist, bottom=dep_hist + unch_hist, color=RED, width=width, edgecolor="white", lw=0.5)
     ax.set_xlabel("Mean pairwise rate (Hz)")
     ax.set_xlim([0, max_rate])
-    ax.set_ylabel("#Connections")
-    sns.despine(offset=2, trim=True)
+    ax.set_ylim([0, 100])
+    ax.set_ylabel("% of connections")
+    sns.despine(offset=2)
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
