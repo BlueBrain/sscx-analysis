@@ -224,10 +224,9 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 
 if __name__ == "__main__":
-
-    project_name = "4590c60f-a52e-437b-aa88-1276f96029c4"
-    t_start = 2000
-    plt_patterns = False
+    project_name = "66bcc1ef-4d2f-4941-be68-3aa33a33c6a9"
+    t_start = 1900
+    plt_patterns = True
     plt_pattern_spikes = True
 
     sim_paths = utils.load_sim_paths(project_name)
@@ -241,7 +240,7 @@ if __name__ == "__main__":
 
     for idx, sim_path in sim_paths.iteritems():
         sim = Simulation(sim_path)
-        t_end = sim.t_end
+        t_end = 7000 #sim.t_end
         spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
         proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
@@ -256,7 +255,7 @@ if __name__ == "__main__":
             plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start, t_end, fig_name)
         if "stim_seed" in level_names:
             if plt_patterns:
-                stim_seed = idx[level_names == "stim_seed"]
+                stim_seed = idx[level_names == "stim_seed"] if len(level_names) > 1 else idx
                 pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name, stim_seed)
                 fig_name = os.path.join(FIGS_DIR, project_name, "patterns_seed%i" % stim_seed)
                 plot_patterns(pattern_gids, tc_gids, tc_pos, fig_name)
