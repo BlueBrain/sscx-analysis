@@ -399,7 +399,7 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
     gs = gridspec.GridSpec(3, n+1, width_ratios=[10 for i in range(n)] + [1])
     for i, assembly_id in enumerate(assembly_idx):
         ax = fig.add_subplot(gs[0, i])
-        ax.pie(probs[assembly_id], labels=["%.3f" % prob for prob in probs[assembly_id]],
+        ax.pie(probs[assembly_id], labels=["%.2f%%" % prob * 100 for prob in probs[assembly_id]],
                colors=[RED, "lightgray", BLUE], normalize=True)
         ax.set_title("assembly %i" % assembly_id)
         ax2 = fig.add_subplot(gs[1, i])
@@ -440,7 +440,7 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     fig = plt.figure(figsize=(10, 10))
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 5])
     ax = fig.add_subplot(gs[0, 0])
-    ax.pie(probs, labels=["%.3f" % prob for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
+    ax.pie(probs, labels=["%.2f%%" % prob * 100 for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
     ax.set_title("assembly 0")
     y = _sort_keys(list(fracs.keys()))
     width = [fracs[key] for key in y]
