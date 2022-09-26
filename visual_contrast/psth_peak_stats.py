@@ -43,7 +43,7 @@ def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance
             peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
     else:
         # Simple peak detection (max. value within first/second half of the t_range interval)
-        assert t_range is not None and len(t_range) = 2 and t_range[0] < t_range[-1], 'ERROR: "t_range" must be specified for simple peak detection!'
+        assert t_range is not None and len(t_range) == 2 and t_range[0] < t_range[-1], 'ERROR: "t_range" must be specified for simple peak detection!'
         print('INFO: Using simple peak detection')
         t_bins = [t_range[0], np.mean(t_range), t_range[-1]]
         t_sel = [np.logical_and(t_rate >= t_bins[i], t_rate < t_bins[i + 1]) for i in range(len(t_bins) - 1)]
