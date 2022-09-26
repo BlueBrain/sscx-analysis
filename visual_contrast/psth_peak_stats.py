@@ -26,8 +26,8 @@ def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance
     within the first/second half of the t_range interval
     """
     t_res = np.median(np.diff(t_rate))
-    
-    if peak_th is not None and peak_width is not None and peak_distance is not None:
+
+    if peak_width is not None and peak_distance is not None:
         # Complex peak detection
         peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
 
@@ -47,12 +47,16 @@ def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance
         print('INFO: Using simple peak detection')
         t_bins = [t_range[0], np.mean(t_range), t_range[-1]]
         t_sel = [np.logical_and(t_rate >= t_bins[i], t_rate < t_bins[i + 1]) for i in range(len(t_bins) - 1)]
-        t_masks = []
-        for i in range(len(t_sel)):
-            msk = t_sel[i].astype(float)
-            msk[~t_sel[i]] = -np.inf
-            t_masks.append(msk)
-        peak_idx = [np.array([np.argmax(r * msk) for msk in t_masks]) for r in rates]
+        peak_idx = []
+        for r in rates:
+            pks = []
+            for i in range(len(t_sel)):
+                r_sel = r.copy()
+                r_sel[~t_sel[i]] = -np.inf
+                pk = np.argmax(r_sel)
+                if peak_th is None or r_sel[pk] >= peak_th:
+                    pks.append(pk)
+            peak_idx.append(np.array(pks, dtype=int))
 
     peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
     peak_t = [t_rate[pidx] for pidx in peak_idx]
