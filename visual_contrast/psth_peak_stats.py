@@ -271,8 +271,6 @@ def main():
             gids = psth_data['gids']
 
             for pattern_idx in pattern_idx_list:
-                print(pattern_idx_list)
-                print(pattern_idx)
                 # Compute peak statistics
                 peak_idx, t1, t2, r1, r2, peak_diff = detect_rate_peaks(t_rate, rates[pattern_idx], peak_th=peak_th, peak_width=peak_width, peak_distance=peak_distance, t_range=peak_range)
                 res_dict = {'peak_idx': peak_idx, 't1': t1, 't2': t2, 'r1': r1, 'r2': r2, 'peak_diff': peak_diff}
