@@ -2,7 +2,7 @@
 #              peak statistics of PSTHs of visual contrast stimulus responses
 #              => Single cell PSTHs need to be computed beforehand and exist as .pkl files!
 # Author: C. Pokorny
-# Last modified: 01/2022
+# Last modified: 09/2022
 
 import sys
 import json
@@ -22,20 +22,41 @@ def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance
     Peak detection (first & second peak) of firing rates (<#GIDs x #time_steps>),
     using peak_th (Hz), peak_width (ms), peak_distance (ms), within given time
     range and selecting the two highest peaks
+    ALTERNATIVELY, simple peak detection can be used by just returning max. values
+    within the first/second half of the t_range interval
     """
     t_res = np.median(np.diff(t_rate))
-    peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
 
-    # Remove out-of-range peaks
-    if t_range is not None:
+    if peak_width is not None and peak_distance is not None:
+        # Complex peak detection
+        peak_idx = [find_peaks(r, height=peak_th, width=peak_width / t_res, distance=peak_distance / t_res)[0] for r in rates]
+
+        # Remove out-of-range peaks
+        if t_range is not None:
+            for idx, pidx in enumerate(peak_idx):
+                peak_idx[idx] = pidx[np.logical_and(t_rate[pidx] >= t_range[0], t_rate[pidx] < t_range[1])]
+
+        # In case of more than two (remaining) peaks: keep only two highest
         for idx, pidx in enumerate(peak_idx):
-            peak_idx[idx] = pidx[np.logical_and(t_rate[pidx] >= t_range[0], t_rate[pidx] < t_range[1])]
-
-    # In case of more than two (remaining) peaks: keep only two highest
-    for idx, pidx in enumerate(peak_idx):
-        r = rates[idx][pidx]
-        sel = np.argsort(r)[:-3:-1] # Find two highest
-        peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
+            r = rates[idx][pidx]
+            sel = np.argsort(r)[:-3:-1] # Find two highest
+            peak_idx[idx] = pidx[np.sort(sel)] # Select two highest (keeping order)
+    else:
+        # Simple peak detection (max. value within first/second half of the t_range interval)
+        assert t_range is not None and len(t_range) == 2 and t_range[0] < t_range[-1], 'ERROR: "t_range" must be specified for simple peak detection!'
+        print('INFO: Using simple peak detection')
+        t_bins = [t_range[0], np.mean(t_range), t_range[-1]]
+        t_sel = [np.logical_and(t_rate >= t_bins[i], t_rate < t_bins[i + 1]) for i in range(len(t_bins) - 1)]
+        peak_idx = []
+        for r in rates:
+            pks = []
+            for i in range(len(t_sel)):
+                r_sel = r.copy()
+                r_sel[~t_sel[i]] = -np.inf
+                pk = np.argmax(r_sel)
+                if peak_th is None or r_sel[pk] >= peak_th:
+                    pks.append(pk)
+            peak_idx.append(np.array(pks, dtype=int))
 
     peak_rate = [rates[idx][pidx] for idx, pidx in enumerate(peak_idx)]
     peak_t = [t_rate[pidx] for pidx in peak_idx]
@@ -45,14 +66,14 @@ def detect_rate_peaks(t_rate, rates, peak_th=5.0, peak_width=20.0, peak_distance
     r1 = [r[0] if len(r) > 0 else np.nan for r in peak_rate] # First peak rate
     r2 = [r[1] if len(r) > 1 else np.nan for r in peak_rate] # Second peak rate
 
-    peak_ratio = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
+    peak_diff = np.array([(_r1 - _r2) / (_r1 + _r2) for (_r1, _r2) in zip(r1, r2)])
 
-    return peak_idx, t1, t2, r1, r2, peak_ratio
+    return peak_idx, t1, t2, r1, r2, peak_diff
 
 
-def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, save_spec=None):
+def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_diff, save_path, save_spec=None):
     """ Plot instantaneous firing rates (<#GIDs x #time_steps>)
-        inkl. peaks (all GIDs for which peak_ratio is defined) """
+        inkl. peaks (all GIDs for which peak_diff is defined) """
 
     if save_spec is None:
         save_spec = ''
@@ -61,7 +82,7 @@ def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, sav
     if len(save_spec) > 0 and not save_spec[0] == '_':
         save_spec = '_' + save_spec
 
-    gid_sel = np.isfinite(peak_ratio)
+    gid_sel = np.isfinite(peak_diff)
     plt.figure(figsize=(8, 3))
     plt.plot(t_rate, rates.T, 'k', alpha=0.25)
     for idx in range(np.sum(gid_sel)):
@@ -78,7 +99,7 @@ def plot_peak_overview(t_rate, rates, t1, t2, r1, r2, peak_ratio, save_path, sav
     plt.show()
 
 
-def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, num_bins=None):
+def plot_peak_statistics(t1, t2, r1, r2, peak_diff, save_path, save_spec=None, num_bins=None):
     """ Plot peak statistics of first vs. second peak """
 
     if save_spec is None:
@@ -89,14 +110,14 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
         save_spec = '_' + save_spec
 
     if num_bins is None:
-        num_bins = [50, 25, 25] # Default for (i) peak time, (ii) peak rate, (iii) peak ratio histograms
+        num_bins = [50, 25, 25] # Default for (i) peak time, (ii) peak rate, (iii) peak difference histograms
     else:
         if np.isscalar(num_bins):
             num_bins = [num_bins] * 3
         else:
             assert len(num_bins) == 3, 'ERROR: Number of bins must be a scalar or a list with 3 entries!'
 
-    gid_sel = np.isfinite(peak_ratio)
+    gid_sel = np.isfinite(peak_diff)
     plt.figure(figsize=(12, 3))
     plt.subplot(1, 4, 1)
     nbins = num_bins[0]
@@ -129,15 +150,15 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
 
     plt.subplot(1, 4, 4)
     nbins = num_bins[2]
-    plt.hist(peak_ratio, bins=nbins, color='tab:purple')
+    plt.hist(peak_diff, bins=nbins, color='tab:purple')
     plt.ylim(plt.ylim())
     plt.plot(np.zeros(2), plt.ylim(), '--k')
-    plt.plot(np.full(2, np.nanmean(peak_ratio)), plt.ylim(), '-', color='tab:green', linewidth=3)
-    plt.text(np.nanmean(peak_ratio), 0.99 * max(plt.ylim()), f'  Mean: {np.nanmean(peak_ratio):.3f}', color='tab:green', ha='left', va='top')
+    plt.plot(np.full(2, np.nanmean(peak_diff)), plt.ylim(), '-', color='tab:green', linewidth=3)
+    plt.text(np.nanmean(peak_diff), 0.99 * max(plt.ylim()), f'  Mean: {np.nanmean(peak_diff):.3f}', color='tab:green', ha='left', va='top')
     plt.grid()
     plt.xlabel('Norm. peak difference')
     plt.ylabel('Count')
-    plt.title('First vs. second peak ratio')
+    plt.title('First vs. second peak difference')
 
     plt.suptitle(f'PSTH peak statistics ({np.sum(gid_sel)} of {len(gid_sel)} cells)', fontweight='bold')
     plt.tight_layout()
@@ -146,7 +167,7 @@ def plot_peak_statistics(t1, t2, r1, r2, peak_ratio, save_path, save_spec=None, 
     plt.show()
 
 
-def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t2, r1, r2, peak_ratio, save_path, save_spec=None):
+def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t2, r1, r2, peak_diff, save_path, save_spec=None):
     """ Plot spikes, firing rate PSTH, and detected peaks
         for selected exemplary cell indices """
 
@@ -175,7 +196,7 @@ def plot_peak_examples(gid_idx_to_plot, t_rate, rates, spike_trains, gids, t1, t
         plt.grid()
         plt.xlabel('Time (ms)')
         plt.ylabel('Firing rate (Hz)')
-        plt.title(f'GID {gid} (peak_ratio={peak_ratio[gidx]:.3})', fontweight='bold')
+        plt.title(f'GID {gid} (peak_diff={peak_diff[gidx]:.3})', fontweight='bold')
         plt.legend(loc='upper left', bbox_to_anchor=[1.0, 1.0])
         plt.tight_layout()
         if save_path is not None:
@@ -205,13 +226,15 @@ def main():
     psth_name = params.get('psth_name') # PSTH folder/filename to load PSTH data from (will be appended by sim condition specifier)
     name_suffix = params.get('name_suffix', '') # PSTH filename suffix to load specific PSTH data from, e.g. '__hex0_EXC_L4'
     psth_path = os.path.join(os.path.normpath(os.path.join(output_root, '..')), psth_name)
-    pattern_idx = params.get('pattern_idx') # Grating pattern (contrast) index to compute peak statistics from (N patterns: idx 0..N-1 w/o opto, idx N..2N-1 with opto)
+    pattern_idx_list = params.get('pattern_idx') # Grating pattern (contrast) index or list of indices to compute peak statistics from (N patterns: idx 0..N-1 w/o opto, idx N..2N-1 with opto)
+    if not isinstance(pattern_idx_list, list):
+        pattern_idx_list = [pattern_idx_list]
     peak_th = params.get('peak_th') # Peak detection threshold (Hz)
     peak_width = params.get('peak_width') # Min. peak width (ms)
     peak_distance = params.get('peak_distance') # Min. distance between peaks (ms)
     peak_range = params.get('peak_range') # Time range to detect peaks, e.g. [0.0, 1000.0]
     do_plot = bool(params.get('do_plot'))
-    num_bins = params.get('num_bins') # Number of bins for (i) peak time, (ii) peak rate, (iii) peak ratio histograms (scalar of 3 items list)
+    num_bins = params.get('num_bins') # Number of bins for (i) peak time, (ii) peak rate, (iii) peak difference histograms (scalar of 3 items list)
     gids_to_plot = params.get('gids_to_plot') # List of exemplary GIDs to plot in detail OR
     cell_idx_to_plot = params.get('cell_idx_to_plot') # List of (sorted) cell indices to plot in detail
 
@@ -251,31 +274,32 @@ def main():
             spike_trains = psth_data['spike_trains']
             gids = psth_data['gids']
 
-            # Compute peak statistics
-            peak_idx, t1, t2, r1, r2, peak_ratio = detect_rate_peaks(t_rate, rates[pattern_idx], peak_th=peak_th, peak_width=peak_width, peak_distance=peak_distance, t_range=peak_range)
-            res_dict = {'peak_idx': peak_idx, 't1': t1, 't2': t2, 'r1': r1, 'r2': r2, 'peak_ratio': peak_ratio}
-            res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'pattern_idx': pattern_idx, 'peak_th': peak_th, 'peak_width': peak_width, 'peak_distance': peak_distance, 'peak_range': peak_range})
+            for pattern_idx in pattern_idx_list:
+                # Compute peak statistics
+                peak_idx, t1, t2, r1, r2, peak_diff = detect_rate_peaks(t_rate, rates[pattern_idx], peak_th=peak_th, peak_width=peak_width, peak_distance=peak_distance, t_range=peak_range)
+                res_dict = {'peak_idx': peak_idx, 't1': t1, 't2': t2, 'r1': r1, 'r2': r2, 'peak_diff': peak_diff}
+                res_dict.update({'sim_id': sim_id, 'cond_dict': cond_dict, 'pattern_idx': pattern_idx, 'peak_th': peak_th, 'peak_width': peak_width, 'peak_distance': peak_distance, 'peak_range': peak_range})
 
-            # Write to pickled file
-            res_file = os.path.join(output_root, f'psth_peak_stats{name_suffix}__SIM{sim_id}__{sim_spec}.pickle')
-            with open(res_file, 'wb') as f:
-                pickle.dump(res_dict, f)
-            print(f'INFO: PSTH peak statistics written to {res_file}')
+                # Write to pickled file
+                res_file = os.path.join(output_root, f'psth_peak_stats{name_suffix}__SIM{sim_id}__{sim_spec}__PAT{pattern_idx}.pickle')
+                with open(res_file, 'wb') as f:
+                    pickle.dump(res_dict, f)
+                print(f'INFO: PSTH peak statistics (pattern {pattern_idx}) written to {res_file}')
 
-            # Do some plotting
-            if do_plot:
-                plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}')
-                plot_peak_statistics(t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}', num_bins)
-                
-                if gids_to_plot is not None:
-                    gid_idx_to_plot = np.array([np.where(gids == gid)[0][0] for gid in gids_to_plot])
-                elif cell_idx_to_plot is not None:
-                    avg_rates_sel = np.nanmean(avg_cell_rates, 0)
-                    sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
-                    gid_idx_to_plot = sort_idx[cell_idx_to_plot]
-                else:
-                    gid_idx_to_plot = None
-                plot_peak_examples(gid_idx_to_plot, t_rate, rates[pattern_idx], spike_trains[pattern_idx], gids, t1, t2, r1, r2, peak_ratio, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}')
+                # Do some plotting
+                if do_plot:
+                    plot_peak_overview(t_rate, rates[pattern_idx], t1, t2, r1, r2, peak_diff, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}__PAT{pattern_idx}')
+                    plot_peak_statistics(t1, t2, r1, r2, peak_diff, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}__PAT{pattern_idx}', num_bins)
+
+                    if gids_to_plot is not None:
+                        gid_idx_to_plot = np.array([np.where(gids == gid)[0][0] for gid in gids_to_plot])
+                    elif cell_idx_to_plot is not None:
+                        avg_rates_sel = np.nanmean(avg_cell_rates, 0)
+                        sort_idx = np.argsort(avg_rates_sel)[::-1] # Ordered by decreasing rate
+                        gid_idx_to_plot = sort_idx[cell_idx_to_plot]
+                    else:
+                        gid_idx_to_plot = None
+                    plot_peak_examples(gid_idx_to_plot, t_rate, rates[pattern_idx], spike_trains[pattern_idx], gids, t1, t2, r1, r2, peak_diff, figs_path, f'{name_suffix}__SIM{sim_id}__{sim_spec}__PAT{pattern_idx}')
 
 
 if __name__ == "__main__":
