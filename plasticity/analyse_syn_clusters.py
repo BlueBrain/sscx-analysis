@@ -5,6 +5,7 @@ author: András Ecker, last update: 02.2022
 
 import os
 from copy import deepcopy
+import warnings
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -15,6 +16,7 @@ from plots import plot_2x2_cond_probs, plot_nx2_cond_probs, plot_diffs_stats
 
 pd.set_option('mode.chained_assignment', None)
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/v7_assemblies"
+CRITICAL_NSAMPLES = 10  # min sample size from one the 4 categories to start significance test
 
 
 def get_fracs(syn_clusters):
@@ -70,9 +72,9 @@ def group_diffs(syn_clusters, diffs):
     return grouped_diffs
 
 
-def get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=False):
+def get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, late_assembly=False):
     """Wrapper of other functions that together load and pre-calculate/group stuff for statistical tests and plotting"""
-    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, late_assembly)
+    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, dir_tag, late_assembly)
     fracs = get_fracs(syn_clusters)
     diffs = utils.get_synapse_changes(sim_path, report_name, gids)
     probs = get_change_probs(syn_clusters, diffs)
@@ -137,18 +139,27 @@ def _prepare2statmodels(df, nsamples, late_assembly, seed=12345):
     df.loc[df["pre_assembly"] == -1, "assembly"] = False
     df.drop("pre_assembly", axis=1, inplace=True)
     # balance dataset
-    nmax = df.groupby(["assembly", "clustered"]).size().min()  # get the min number of synapses in the 4 categories
-    nsamples = nmax if nsamples > nmax else nsamples
-    dfs = [df.loc[(df["assembly"] == True) & (df["clustered"] == True)].sample(nsamples, random_state=seed)]
-    dfs.append(df.loc[(df["assembly"] == True) & (df["clustered"] == False)].sample(nsamples, random_state=seed))
-    dfs.append(df.loc[(df["assembly"] == False) & (df["clustered"] == True)].sample(nsamples, random_state=seed))
-    dfs.append(df.loc[(df["assembly"] == False) & (df["clustered"] == False)].sample(nsamples, random_state=seed))
-    balanced_df = pd.concat(dfs).sort_index()
-    # add extra column with single group name for plotting with `seaborn` and Tukey's test
-    balanced_df["groups"] = "a-c"
-    balanced_df.loc[(balanced_df["assembly"] == True) & (balanced_df["clustered"] == False), "groups"] = "a-nc"
-    balanced_df.loc[(balanced_df["assembly"] == False) & (balanced_df["clustered"] == True), "groups"] = "na-c"
-    balanced_df.loc[(balanced_df["assembly"] == False) & (balanced_df["clustered"] == False), "groups"] = "na-nc"
+    ncat = df.groupby(["assembly", "clustered"]).size()
+    if len(ncat) == 4:
+        nmax = ncat.min()  # get the min number of synapses in the 4 categories
+        nsamples = nmax if nsamples > nmax else nsamples
+        if nsamples > CRITICAL_NSAMPLES:
+            dfs = [df.loc[(df["assembly"] == True) & (df["clustered"] == True)].sample(nsamples, random_state=seed)]
+            dfs.append(df.loc[(df["assembly"] == True) & (df["clustered"] == False)].sample(nsamples, random_state=seed))
+            dfs.append(df.loc[(df["assembly"] == False) & (df["clustered"] == True)].sample(nsamples, random_state=seed))
+            dfs.append(df.loc[(df["assembly"] == False) & (df["clustered"] == False)].sample(nsamples, random_state=seed))
+            balanced_df = pd.concat(dfs).sort_index()
+            # add extra column with single group name for plotting with `seaborn` and Tukey's test
+            balanced_df["groups"] = "a-c"
+            balanced_df.loc[(balanced_df["assembly"] == True) & (balanced_df["clustered"] == False), "groups"] = "a-nc"
+            balanced_df.loc[(balanced_df["assembly"] == False) & (balanced_df["clustered"] == True), "groups"] = "na-c"
+            balanced_df.loc[(balanced_df["assembly"] == False) & (balanced_df["clustered"] == False), "groups"] = "na-nc"
+        else:
+            balanced_df = None
+    else:
+        balanced_df = None
+    if balanced_df is None:
+        warnings.warn("Not enough sample (most likely from clustered assembly synapses) for statistical testing!")
     return balanced_df
 
 
@@ -165,47 +176,52 @@ def _prepare2statannotations(tukey_df):
 def test_significance(df, nsamples=500, late_assembly=False, sign_th=0.05):
     """Performs 2-way ANOVA and post-hoc Tukey's test using `statmodels`"""
     balanced_df = _prepare2statmodels(df, nsamples=nsamples, late_assembly=late_assembly)
-    model = ols('delta_rho ~ C(assembly) + C(clustered) + C(assembly):C(clustered)', data=balanced_df).fit()
-    anova_df = sm.stats.anova_lm(model, typ=2)
-    if np.nanmin(anova_df["PR(>F)"].to_numpy()) < sign_th:
-        tukey = pairwise_tukeyhsd(endog=balanced_df["delta_rho"], groups=balanced_df["groups"], alpha=sign_th)
-        tukey_df = pd.DataFrame(data=tukey._results_table.data[1:], columns=tukey._results_table.data[0])
-        if tukey_df["reject"].any():
-            pairs, p_vals = _prepare2statannotations(tukey_df)
+    if balanced_df is not None:
+        model = ols('delta_rho ~ C(assembly) + C(clustered) + C(assembly):C(clustered)', data=balanced_df).fit()
+        anova_df = sm.stats.anova_lm(model, typ=2)
+        if np.nanmin(anova_df["PR(>F)"].to_numpy()) < sign_th:
+            tukey = pairwise_tukeyhsd(endog=balanced_df["delta_rho"], groups=balanced_df["groups"], alpha=sign_th)
+            tukey_df = pd.DataFrame(data=tukey._results_table.data[1:], columns=tukey._results_table.data[0])
+            if tukey_df["reject"].any():
+                pairs, p_vals = _prepare2statannotations(tukey_df)
+            else:
+                pairs, p_vals = None, None
         else:
-            pairs, p_vals = None, None
+            tukey_df, pairs, p_vals = None, None, None
+        return balanced_df, anova_df, tukey_df, pairs, p_vals
     else:
-        tukey_df, pairs, p_vals = None, None, None
-    return balanced_df, anova_df, tukey_df, pairs, p_vals
+        return None, None, None, None, None
 
 
-def main(project_name):
+def main(project_name, dir_tag):
     report_name = "rho"
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     assert len(level_names) == 1 and level_names[0] == "seed"
-    utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
+    figs_dir = os.path.join(FIGS_DIR, project_name + dir_tag)
+    utils.ensure_dir(figs_dir)
     # morph_df = utils.load_extra_morph_features(["loc", "dist", "diam", "br_ord"])
 
     for seed, sim_path in sim_paths.iteritems():
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
-        _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name)
+        _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
-        fig_name = os.path.join(FIGS_DIR, project_name, "syn_clust_plast_seed%i.png" % seed)
+        fig_name = os.path.join(figs_dir, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
         # checking if the amount of any change is significant
         df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
         dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0])
-        fig_name = os.path.join(FIGS_DIR, project_name, "assembly_diff_stats_seed%i.png" % seed)
-        plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
+        fig_name = os.path.join(figs_dir, "assembly_diff_stats_seed%i.png" % seed)
+        if pot_df is not None and dep_df is not None:
+            plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
 
         # same as above, but for late assembly
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
-        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, late_assembly=True)
+        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, late_assembly=True)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
-        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_cond_probs_seed%i.png" % seed)
+        fig_name = os.path.join(figs_dir, "late_assembly_cond_probs_seed%i.png" % seed)
         # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
         # and as some preprocessing functions create dicts, one has to select it by the `0` key here...
         plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
@@ -213,11 +229,12 @@ def main(project_name):
         df = diffs2df(deepcopy(grouped_diffs))
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0], late_assembly=True)
         dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0], late_assembly=True)
-        fig_name = os.path.join(FIGS_DIR, project_name, "late_assembly_diff_stats_seed%i.png" % seed)
-        plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
-
+        fig_name = os.path.join(figs_dir, "late_assembly_diff_stats_seed%i.png" % seed)
+        if pot_df is not None and dep_df is not None:
+            plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
 
 
 if __name__ == "__main__":
-    project_name = "e0fbb0c8-07a4-49e0-be7d-822b2b2148fb"
-    main(project_name)
+    dir_tag = ""
+    project_name = "LayerWiseOUNoise_Ca1p05_PyramidPatterns"
+    main(project_name, dir_tag)

@@ -190,9 +190,9 @@ def load_patterns(project_name, seed=None):
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
 
-def load_synapse_clusters(project_name, seed, late_assembly=False):
+def load_synapse_clusters(project_name, seed, dir_tag, late_assembly):
     """Loads synapse clusters for given `seed` saved by `assemblyfire`"""
-    base_dir = os.path.join(SIMS_DIR, project_name, "analyses", "seed%i_syn_clusters" % seed)
+    base_dir = os.path.join(SIMS_DIR, project_name, "analyses", "syn_clusters" + dir_tag, "seed%i" % seed)
     syn_clusters, gids = {}, np.array([])
     for f_name in os.listdir(base_dir):
         if late_assembly:
