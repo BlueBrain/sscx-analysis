@@ -153,10 +153,10 @@ def get_stim_spikes(config):
         return {}
 
 
-def get_tc_spikes(sim, t_start, t_end):
+def get_tc_spikes(sim_config, t_start, t_end):
     """Loads in input spikes (on projections) using the bluepy.Simulation.config object.
     Returns the format used for plotting rasters and population rates"""
-    f_name = _get_spikef_name(sim.config)
+    f_name = _get_spikef_name(sim_config)
     if f_name is not None:
         tmp = np.loadtxt(f_name, skiprows=1)
         spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)

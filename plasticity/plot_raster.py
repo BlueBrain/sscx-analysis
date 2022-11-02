@@ -57,10 +57,10 @@ def setup_raster(spike_times, spiking_gids, ys, colors, groups, types, type_colo
     return spiking_ys, cols, rates_dict
 
 
-def get_tc_rates(sim, t_start, t_end):
+def get_tc_rates(project_name, sim_config, t_start, t_end):
     """Read VPM and POm spikes from SpikeFile"""
-    spike_times, spiking_gids = utils.get_tc_spikes(sim, t_start, t_end)
-    vpm_gids, pom_gids = utils.load_tc_gids(os.path.split(sim.config.Run_Default.CurrentDir)[0])
+    spike_times, spiking_gids = utils.get_tc_spikes(sim_config, t_start, t_end)
+    vpm_gids, pom_gids = utils.load_tc_gids(project_name)
     proj_spikes, proj_rates = {}, {}
     for proj_name, proj_gids in zip(["VPM", "POm"], [vpm_gids, pom_gids]):
         if proj_gids is not None:
@@ -224,9 +224,9 @@ def plot_pattern_rates(pattern_spikes, pattern_sc_rates, pattern_rates, t_start,
 
 
 if __name__ == "__main__":
-    project_name = "66bcc1ef-4d2f-4941-be68-3aa33a33c6a9"
+    project_name = "mod_test/np_sonata_np_mod"
     t_start = 1900
-    plt_patterns = True
+    plt_patterns = False
     plt_pattern_spikes = True
 
     sim_paths = utils.load_sim_paths(project_name)
@@ -238,11 +238,11 @@ if __name__ == "__main__":
         pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name)
         plot_patterns(pattern_gids, tc_gids, tc_pos, os.path.join(FIGS_DIR, project_name, "patterns"))
 
-    for idx, sim_path in sim_paths.iteritems():
+    for idx, sim_path in sim_paths.items():
         sim = Simulation(sim_path)
         t_end = 7000 #sim.t_end
         spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
-        proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
+        proj_spikes, proj_rates = get_tc_rates(project_name, sim.config, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
         plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
 
