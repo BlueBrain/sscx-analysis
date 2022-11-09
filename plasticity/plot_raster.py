@@ -111,7 +111,7 @@ def plot_raster(spike_times, spiking_gids, proj_rate_dict, aesthetics, t_start, 
     ax.set_yticks(aesthetics["yticks"])
     ax.set_yticklabels(aesthetics["yticklabels"])
     ax.set_ylabel("Cortical depth (um)")
-    ax.legend(handles=legend_handles, ncol=4, frameon=False, loc="upper right" bbox_to_anchor=(1., 1., 0., 0.07))
+    ax.legend(handles=legend_handles, ncol=4, frameon=False, loc="upper right", bbox_to_anchor=(1., 1., 0., 0.07))
     ax2 = fig.add_subplot(gs[1])
     sns.despine(ax=ax2)
     ax2.plot(t_rate, rates_dict["PC"], color=aesthetics["type_colors"][0])  # label="PC")
