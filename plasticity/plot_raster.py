@@ -89,40 +89,40 @@ def get_pattern_rates(pattern_gids, spike_times, spiking_gids, t_start, t_end):
 
 
 
-def plot_raster(spike_times, spiking_gids, proj_rate_dict, asthetics, t_start, t_end, fig_name):
+def plot_raster(spike_times, spiking_gids, proj_rate_dict, aesthetics, t_start, t_end, fig_name, fig_width=20, fig_height=9):
     """Plots raster"""
     start_time = time.time()
     spiking_ys, cols, rates_dict = setup_raster(spike_times, spiking_gids,
-                                                asthetics["ys"], asthetics["colors"], asthetics["groups"],
-                                                asthetics["types"], asthetics["type_colors"], t_start, t_end)
-    t_rate = np.linspace(t_start, t_end, len(rates_dict[asthetics["types"][0]]))
+                                                aesthetics["ys"], aesthetics["colors"], aesthetics["groups"],
+                                                aesthetics["types"], aesthetics["type_colors"], t_start, t_end)
+    t_rate = np.linspace(t_start, t_end, len(rates_dict[aesthetics["types"][0]]))
 
     if proj_rate_dict is None:
-        fig = plt.figure(figsize=(20, 9))
+        fig = plt.figure(figsize=(fig_width, fig_height))
         gs = gridspec.GridSpec(3, 1, height_ratios=[15, 1, 1])
     else:
-        fig = plt.figure(figsize=(20, 10))
+        fig = plt.figure(figsize=(fig_width, fig_height + 1))
         gs = gridspec.GridSpec(4, 1, height_ratios=[14, 1, 1, 1])
     ax = fig.add_subplot(gs[0])
     ax.set_facecolor((0.95, 0.95, 0.95))
     ax.scatter(spike_times, spiking_ys, c=cols, alpha=0.9, marker='.', s=2., edgecolor="none")
     ax.set_xlim([t_start, t_end])
-    ax.set_ylim([np.max(asthetics["yticks"]), np.min(asthetics["yticks"])])
-    ax.set_yticks(asthetics["yticks"])
-    ax.set_yticklabels(asthetics["yticklabels"])
+    ax.set_ylim([np.max(aesthetics["yticks"]), np.min(aesthetics["yticks"])])
+    ax.set_yticks(aesthetics["yticks"])
+    ax.set_yticklabels(aesthetics["yticklabels"])
     ax.set_ylabel("Cortical depth (um)")
-    ax.legend(handles=legend_handles, ncol=4, frameon=False, bbox_to_anchor=(0.77, 1.))
+    ax.legend(handles=legend_handles, ncol=4, frameon=False, loc="upper right" bbox_to_anchor=(1., 1., 0., 0.07))
     ax2 = fig.add_subplot(gs[1])
     sns.despine(ax=ax2)
-    ax2.plot(t_rate, rates_dict["PC"], color=asthetics["type_colors"][0])  # label="PC")
-    ax2.fill_between(t_rate, np.zeros_like(t_rate), rates_dict["PC"], color=asthetics["type_colors"][0], alpha=0.1)
+    ax2.plot(t_rate, rates_dict["PC"], color=aesthetics["type_colors"][0])  # label="PC")
+    ax2.fill_between(t_rate, np.zeros_like(t_rate), rates_dict["PC"], color=aesthetics["type_colors"][0], alpha=0.1)
     ax2.set_xlim([t_start, t_end])
     ax2.set_ylabel("PC Rate\n(Hz)")
     # ax2.set_ylim(bottom=0)
     # ax2.legend(frameon=False, loc=1)
     ax3 = fig.add_subplot(gs[2])
     sns.despine(ax=ax3)
-    for type_, col in zip(asthetics["types"][1:], asthetics["type_colors"][1:]):
+    for type_, col in zip(aesthetics["types"][1:], aesthetics["type_colors"][1:]):
         ax3.plot(t_rate, rates_dict[type_], color=col)  # label=type_
         ax3.fill_between(t_rate, np.zeros_like(t_rate), rates_dict[type_], color=col, alpha=0.1)
     ax3.set_xlim([t_start, t_end])
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
     with open("raster_asth.pkl", "rb") as f:
-        raster_asthetics = pickle.load(f)
+        raster_aesthetics = pickle.load(f)
     if plt_patterns and "stim_seed" not in level_names:
         pattern_gids, tc_gids, tc_pos, _ = utils.load_patterns(project_name)
         plot_patterns(pattern_gids, tc_gids, tc_pos, os.path.join(FIGS_DIR, project_name, "patterns"))
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         spike_times, spiking_gids = utils.get_spikes(sim, t_start, t_end)
         proj_spikes, proj_rates = get_tc_rates(sim, t_start, t_end)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sraster.png" % utils.midx2str(idx, level_names))
-        plot_raster(spike_times, spiking_gids, proj_rates, raster_asthetics, t_start, t_end, fig_name)
+        plot_raster(spike_times, spiking_gids, proj_rates, raster_aesthetics, t_start, t_end, fig_name)
 
         if plt_pattern_spikes and "stim_seed" not in level_names:
             if not plt_patterns:
