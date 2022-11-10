@@ -208,8 +208,9 @@ def plot_gmax_change_hist(gmax, fig_name):
         pos_hist, bin_edges = numba_hist(gmax_change[gmax_change > 0], 30, (0, gmax_change_95p))
         neg_hist, _ = numba_hist(gmax_change[gmax_change < 0], 30, (-1 * gmax_change_95p, 0))
         bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
-        ax.bar(bin_centers, pos_hist, color=RED, edgecolor="black", lw=0.5)
-        ax.bar(-1 * bin_centers[::-1], -1 * neg_hist, color=BLUE, edgecolor="black", lw=0.5)
+        width = bin_centers[1] - bin_centers[0]
+        ax.bar(bin_centers, pos_hist, width=width, color=RED, edgecolor="black", lw=0.5)
+        ax.bar(-1 * bin_centers[::-1], -1 * neg_hist, width=width, color=BLUE, edgecolor="black", lw=0.5)
         ax.set_xlim([-gmax_change_95p, gmax_change_95p])
         ax.set_yticks([])
         if i == n_tbins - 1:
@@ -367,6 +368,23 @@ def plot_rate_vs_change(df, report_name, fig_name):
     ax.set_ylim([0, 100])
     ax.set_ylabel("% of connections")
     sns.despine(offset=2)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_agg_edge_dists(ts, dists, fig_name):
+    """Plots L2 norm of differences between edges (of aggregated connectivity matrix) in consecutive time bins"""
+    ts = ts / 1000  # ms -> s conversion
+    xticks = np.arange(0, ts[-1]+0.1, 30)
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(ts, dists, color="black", linewidth=1.5)
+    for t in xticks:
+        ax.axvline(t, color="gray", alpha=0.5, linewidth=0.5)
+    ax.set_xticks(xticks)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Norm. dist. in agg. conn. mat.")
+    sns.despine(trim=True)
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 

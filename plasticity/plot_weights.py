@@ -70,6 +70,14 @@ def get_transition_matrix(data, bins):
     return transition_matrix, bin_edges
 
 
+def get_td_edge_dists(td_df):
+    """Gets L2 norm of differences between edges in consecutive time bins"""
+    ts = td_df.columns.get_level_values(0).to_numpy()
+    edges = td_df.to_numpy()
+    dists = np.linalg.norm(np.diff(edges, axis=1), axis=0)
+    return ts[1:], dists
+
+
 def corr_pw_rate2change(sim_path, report_name, t_start, t_end):
     """Correlate (builds DataFrame with 2 columns...) mean pairwise firing rates
     and the total change of mean (per connection) values"""
@@ -81,12 +89,13 @@ def corr_pw_rate2change(sim_path, report_name, t_start, t_end):
     df["pw_rate"] = pw_rates[conn_idx["row"].to_numpy(), conn_idx["col"].to_numpy()]
     return df
 
+
 def main(project_name):
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
-    for idx, sim_path in tqdm(sim_paths.iteritems()):
+    for idx, sim_path in tqdm(sim_paths.items()):
         report_name = "gmax_AMPA"
         data, diffs = get_total_change_by(sim_path, report_name, return_data=True)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_pies.png" % utils.midx2str(idx, level_names))
@@ -101,23 +110,27 @@ def main(project_name):
         bins, t, hist_data = utils.get_synapse_report_hist(h5f_name)
         hist_data = utils.update_hist_data(report_name, hist_data, bins)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_stack.png" % utils.midx2str(idx, level_names))
-        plots.plot_rho_stack(bins, deepcopy(t), hist_data, fig_name)
+        plots.plot_rho_stack(bins, t.copy(), hist_data, fig_name)
         t_idx = int(len(t) / 2)
         _, middle_data = utils.load_synapse_report(h5f_name, t_start=t[t_idx], t_end=t[t_idx + 1])
         transition_matrix, _ = get_transition_matrix(middle_data, bins)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_transition.png" % utils.midx2str(idx, level_names))
-        plots.plot_transition_matrix(deepcopy(transition_matrix), bins, fig_name)
+        plots.plot_transition_matrix(transition_matrix.copy(), bins, fig_name)
         last_t, last_df = get_all_synapses_tend(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_hist.png" % utils.midx2str(idx, level_names))
         plots.plot_rho_hist(deepcopy(last_t), last_df, fig_name)
         mtypes, last_rho_matrix = get_mean_rho_matrix(last_df)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_matrix.png" % utils.midx2str(idx, level_names))
         plots.plot_mean_rho_matrix(deepcopy(last_t), mtypes, last_rho_matrix, fig_name)
+        _, _, td_df = utils.load_td_edges(sim_path, report_name, "mean")
+        t_change, dists = get_td_edge_dists(td_df)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%std_edges_dist.png" % utils.midx2str(idx, level_names))
+        plots.plot_agg_edge_dists(t_change.copy(), dists, fig_name)
         rate_change_df = corr_pw_rate2change(sim_path, report_name, t[0], t[-1])
         fig_name = os.path.join(FIGS_DIR, project_name, "%srate_vs_rho.png" % utils.midx2str(idx, level_names))
         plots.plot_rate_vs_change(rate_change_df, report_name, fig_name)
-        
+
 
 if __name__ == "__main__":
-    project_name = "LayerWiseEShotNoise_PyramidPatterns"
+    project_name = "LayerWiseOUNoise_Ca1p05_PyramidPatterns"
     main(project_name)
