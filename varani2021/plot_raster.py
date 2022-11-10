@@ -29,7 +29,7 @@ def get_tc_rates(sim, t_start, t_end):
 
 
 if __name__ == "__main__":
-    project_name = "84f11a52-5b9d-42a3-9765-cedece9771a4"
+    project_name = "e3dbb0eb-e148-4bf2-8b0e-82aa03b8fe7a"
     t_start = 1500
 
     sim_paths = utils.load_sim_paths(project_name)

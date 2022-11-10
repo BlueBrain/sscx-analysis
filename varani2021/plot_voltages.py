@@ -30,7 +30,7 @@ def get_n_highest_epsp_voltages(gids, voltages, epsps, n=10):
 
 
 def main(sim, fig_name_tag):
-    t_start, t_end, epsp_t_windows = 2000, 2050, [2000, 2010, 2020]
+    t_start, t_end, epsp_t_windows = 2000, 2300, [1960, 2010, 2060]
     # get L23 PC spikes and rate
     l23pc_gids = sim.circuit.cells.ids({"$target": sim.target, Cell.LAYER: [2, 3], Cell.SYNAPSE_CLASS: "EXC"})
     spike_times, spiking_gids = utils.get_spikes(sim, l23pc_gids, t_start, t_end)
@@ -43,7 +43,6 @@ def main(sim, fig_name_tag):
     fig_name = os.path.join(FIGS_DIR, project_name, "%sL23PC_vs.png" % fig_name_tag)
     plot_all_voltages(v_spiking, v_subtreshold, l23pc_rate, t_start, t_end, fig_name)
     # calculate EPSP amplitudes for the non-spiking group and plots the voltage trace corresponding to the 10 highest
-    v_subtreshold = v_subtreshold
     epsps = get_epsp_amplitudes(t, v_subtreshold, epsp_t_windows)
     fig_name = os.path.join(FIGS_DIR, project_name, "%sL23PC_subth_epsps.png" % fig_name_tag)
     plot_epsps_amplitudes(epsps, fig_name)
@@ -53,12 +52,12 @@ def main(sim, fig_name_tag):
 
 
 if __name__ == "__main__":
-    project_name = "84f11a52-5b9d-42a3-9765-cedece9771a4"
+    project_name = "e3dbb0eb-e148-4bf2-8b0e-82aa03b8fe7a"
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
-    for idx, sim_path in sim_paths.iteritems():
+    for idx, sim_path in sim_paths.items():
         sim = Simulation(sim_path)
         fig_name_tag = utils.midx2str(idx, level_names)
         main(sim, fig_name_tag)
