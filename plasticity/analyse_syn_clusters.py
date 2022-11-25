@@ -72,9 +72,9 @@ def group_diffs(syn_clusters, diffs):
     return grouped_diffs
 
 
-def get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, late_assembly=False):
+def get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, cross_assembly=False):
     """Wrapper of other functions that together load and pre-calculate/group stuff for statistical tests and plotting"""
-    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, dir_tag, late_assembly)
+    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, dir_tag, cross_assembly)
     fracs = get_fracs(syn_clusters)
     diffs = utils.get_synapse_changes(sim_path, report_name, gids)
     probs = get_change_probs(syn_clusters, diffs)
@@ -128,12 +128,8 @@ def diffs2df(grouped_diffs):
     return pd.concat(dfs).sort_index()
 
 
-def _prepare2statmodels(df, nsamples, late_assembly, seed=12345):
-    """Prepares DataFrame for significance testing in `statmodels` (renaming stuff and balancing dataset)
-    if `late_assembly=True` it deletes *within* late assembly synapses
-    - and will only test *cross* assembly vs. non-assembly synapses"""
-    if late_assembly:  # remove within assembly synapses
-        df = df.loc[df["assembly"] != df["pre_assembly"], :]
+def _prepare2statmodels(df, nsamples, seed=12345):
+    """Prepares DataFrame for significance testing in `statmodels` (renaming stuff and balancing dataset)"""
     # get rid of assembly IDs, and replace pre_assembly IDs with just True/False (+rename the column)
     df.loc[df["pre_assembly"] != -1, "assembly"] = True
     df.loc[df["pre_assembly"] == -1, "assembly"] = False
@@ -173,9 +169,9 @@ def _prepare2statannotations(tukey_df):
     return pairs, p_vals
 
 
-def test_significance(df, nsamples=500, late_assembly=False, sign_th=0.05):
+def test_significance(df, nsamples=500, sign_th=0.05):
     """Performs 2-way ANOVA and post-hoc Tukey's test using `statmodels`"""
-    balanced_df = _prepare2statmodels(df, nsamples=nsamples, late_assembly=late_assembly)
+    balanced_df = _prepare2statmodels(df, nsamples=nsamples)
     if balanced_df is not None:
         model = ols('delta_rho ~ C(assembly) + C(clustered) + C(assembly):C(clustered)', data=balanced_df).fit()
         anova_df = sm.stats.anova_lm(model, typ=2)
@@ -202,7 +198,7 @@ def main(project_name, dir_tag):
     utils.ensure_dir(figs_dir)
     # morph_df = utils.load_extra_morph_features(["loc", "dist", "diam", "br_ord"])
 
-    for seed, sim_path in sim_paths.iteritems():
+    for seed, sim_path in sim_paths.items():
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
         _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
@@ -217,19 +213,20 @@ def main(project_name, dir_tag):
         if pot_df is not None and dep_df is not None:
             plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
 
-        # same as above, but for late assembly
+        # same as above, but for cross assemblies
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
-        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, late_assembly=True)
+        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name,
+                                                        dir_tag, cross_assembly=True)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
-        fig_name = os.path.join(figs_dir, "late_assembly_cond_probs_seed%i.png" % seed)
-        # late assembly_id is 0 (it just happens to be... and is hard coded in `assemblyfire` as well)
-        # and as some preprocessing functions create dicts, one has to select it by the `0` key here...
-        plot_nx2_cond_probs(probs[0], fracs[0], pot_contrasts[0], dep_contrasts[0], fig_name)
+        for post_assembly, pot_contrast in pot_contrasts.items():
+            fig_name = os.path.join(figs_dir, "cross_assembly%i_cond_probs_seed%i.png" % (post_assembly, seed))
+            plot_nx2_cond_probs(probs[post_assembly], fracs[post_assembly],
+                                pot_contrast, dep_contrasts[post_assembly], fig_name)
         # checking if the amount of any change is significant
         df = diffs2df(deepcopy(grouped_diffs))
-        pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0], late_assembly=True)
-        dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0], late_assembly=True)
-        fig_name = os.path.join(figs_dir, "late_assembly_diff_stats_seed%i.png" % seed)
+        pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
+        dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0])
+        fig_name = os.path.join(figs_dir, "cross_assembly_diff_stats_seed%i.png" % seed)
         if pot_df is not None and dep_df is not None:
             plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
 

@@ -190,18 +190,18 @@ def load_patterns(project_name, seed=None):
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
 
-def load_synapse_clusters(project_name, seed, dir_tag, late_assembly):
+def load_synapse_clusters(project_name, seed, dir_tag, cross_assembly):
     """Loads synapse clusters for given `seed` saved by `assemblyfire`"""
     base_dir = os.path.join(SIMS_DIR, project_name, "analyses", "syn_clusters" + dir_tag, "seed%i" % seed)
     syn_clusters, gids = {}, np.array([])
     for f_name in os.listdir(base_dir):
-        if late_assembly:
-            if f_name[:5] == "late_" and f_name[-4:] == ".pkl":
+        if cross_assembly:
+            if f_name[:6] == "cross_" and f_name[-4:] == ".pkl":
                 df = pd.read_pickle(os.path.join(base_dir, f_name))
                 syn_clusters[int(f_name.split("assembly")[1].split(".pkl")[0])] = df
                 gids = np.concatenate((gids, df["post_gid"].unique()))
         else:
-            if f_name[:5] != "late_" and f_name[-4:] == ".pkl":
+            if f_name[:6] != "cross_" and f_name[-4:] == ".pkl":
                 df = pd.read_pickle(os.path.join(base_dir, f_name))
                 syn_clusters[int(f_name.split("assembly")[1].split(".pkl")[0])] = df
                 gids = np.concatenate((gids, df["post_gid"].unique()))

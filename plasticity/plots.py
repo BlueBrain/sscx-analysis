@@ -347,7 +347,7 @@ def plot_transition_matrix(transition_matrix, bins, fig_name):
     plt.close(fig)
 
 
-def plot_rate_vs_change(df, report_name, fig_name):
+def plot_rate_vs_change(df, fig_name):
     """Plots total changes (of mean per connection)
     vs. (well it's just a histogram, not scatter plot....) mean pairwise firing rates"""
     max_rate = df["pw_rate"].quantile(0.999)
@@ -445,7 +445,7 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
 
 
 def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
-    """For a late assembly plots pie chart with total changes in sample neurons and 2 matrices
+    """For cross assembly plots pie chart with total changes in sample neurons and 2 matrices
     with the cond. prob. of potentiation and depression (in a Nx2 grid)"""
     plt.rcParams["patch.edgecolor"] = "black"
     neg_colors = plt.cm.Greys_r(np.linspace(0, 1, 128))
@@ -458,17 +458,18 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     pot_extr = np.nanmax(np.abs(pot_matrix))
     dep_extr = np.nanmax(np.abs(dep_matrix))
 
-    yticklabels = ["assembly %i" % i for i in range(pot_matrix.shape[0] - 1)] + ["non-assembly"]
-    fig = plt.figure(figsize=(10, 10))
-    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 5])
+    fig = plt.figure(figsize=(10, 6.5))
+    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 3])
     ax = fig.add_subplot(gs[0, 0])
     ax.pie(probs, labels=["%.2f%%" % (prob * 100) for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
     ax.set_title("assembly 0")
-    y = _sort_keys(list(fracs.keys()))
-    width = [fracs[key] for key in y]
+    tmp = _sort_keys(list(fracs.keys()))
+    ys = np.append(np.arange(len(tmp[:-1])), -1)
+    yticklabels = ["assembly %i" % i for i in tmp[:-1]] + ["non-assembly"]
+    width = [fracs[key] for key in tmp]
     ax2 = fig.add_subplot(gs[0, 1])
-    ax2.barh(y, width, color="gray")
-    ax2.set_yticks(y)
+    ax2.barh(ys, width, color="gray")
+    ax2.set_yticks(ys)
     ax2.set_yticklabels(yticklabels)
     ax2.set_xlabel("Synapse ratio")
     sns.despine(ax=ax2, offset=2)
