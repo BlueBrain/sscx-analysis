@@ -444,7 +444,7 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
     plt.close(fig)
 
 
-def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
+def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, post_assembly_id, fig_name):
     """For cross assembly plots pie chart with total changes in sample neurons and 2 matrices
     with the cond. prob. of potentiation and depression (in a Nx2 grid)"""
     plt.rcParams["patch.edgecolor"] = "black"
@@ -462,7 +462,7 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, fig_name):
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 3])
     ax = fig.add_subplot(gs[0, 0])
     ax.pie(probs, labels=["%.2f%%" % (prob * 100) for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
-    ax.set_title("assembly 0")
+    ax.set_title("assembly %i" % post_assembly_id)
     tmp = _sort_keys(list(fracs.keys()))
     ys = np.append(np.arange(len(tmp[:-1])), -1)
     yticklabels = ["assembly %i" % i for i in tmp[:-1]] + ["non-assembly"]

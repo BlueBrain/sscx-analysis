@@ -1,6 +1,6 @@
 """
 Loads synapse clusters saved by `assemblyfire` and checks their total changes in the synapse report
-author: András Ecker, last update: 02.2022
+author: András Ecker, last update: 11.2022
 """
 
 import os
@@ -221,7 +221,7 @@ def main(project_name, dir_tag):
         for post_assembly, pot_contrast in pot_contrasts.items():
             fig_name = os.path.join(figs_dir, "cross_assembly%i_cond_probs_seed%i.png" % (post_assembly, seed))
             plot_nx2_cond_probs(probs[post_assembly], fracs[post_assembly],
-                                pot_contrast, dep_contrasts[post_assembly], fig_name)
+                                pot_contrast, dep_contrasts[post_assembly], post_assembly, fig_name)
         # checking if the amount of any change is significant
         df = diffs2df(deepcopy(grouped_diffs))
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
