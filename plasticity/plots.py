@@ -462,10 +462,10 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, post_assembly_id, 
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 3])
     ax = fig.add_subplot(gs[0, 0])
     ax.pie(probs, labels=["%.2f%%" % (prob * 100) for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
-    ax.set_title("assembly %i" % post_assembly_id)
+    ax.set_title("post assembly %i" % post_assembly_id)
     tmp = _sort_keys(list(fracs.keys()))
     ys = np.append(np.arange(len(tmp[:-1])), -1)
-    yticklabels = ["assembly %i" % i for i in tmp[:-1]] + ["non-assembly"]
+    yticklabels = ["pre assembly %i" % i for i in tmp[:-1]] + ["non-assembly"]
     width = [fracs[key] for key in tmp]
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.barh(ys, width, color="gray")
