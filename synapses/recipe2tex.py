@@ -3,9 +3,8 @@ Reads xml synapse recipe and outputs LaTex table (rows) with parameters
 last modified: András Ecker 05.2021
 """
 
-# see: FUNCZ-183; the command below worked in 08.2022:
-# pip install --index-url https://bbpteam.epfl.ch/repository/devpi/bbprelman/dev/+simple/ spykfunc
-from recipe import Recipe
+# see FUNCZ-183: pip install --index-url https://bbpteam.epfl.ch/repository/devpi/bbprelman/dev/+simple/ fz-td-recipe
+from fz_td_recipe import Recipe
 
 
 def recipe_to_tex(recipe, f_name):
