@@ -19,8 +19,7 @@ def recipe_to_tex(recipe, f_name):
 
 
 if __name__ == "__main__":
-    recipe_path = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/gerrit/CircuitBuildRecipe/" \
-                  "inputs/4_synapse_generation/ALL/builderRecipeAllPathways.xml"
-    f_name = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/recipe.tex"
-    recipe_to_tex(Recipe(recipe_path), f_name)
+    xmlf_name = "/gpfs/bbp.cscs.ch/project/proj83/circuits/Bio_M/20200805/bioname/builderRecipeAllPathways.xml"
+    outf_name = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/recipe.tex"
+    recipe_to_tex(Recipe(xmlf_name), outf_name)
 
