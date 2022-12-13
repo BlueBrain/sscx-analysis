@@ -4,7 +4,6 @@ author: András Ecker, last update: 11.2022
 """
 
 import os
-from copy import deepcopy
 import warnings
 import numpy as np
 import pandas as pd
@@ -17,69 +16,6 @@ from plots import plot_2x2_cond_probs, plot_nx2_cond_probs, plot_diffs_stats
 pd.set_option('mode.chained_assignment', None)
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/v7_assemblies"
 CRITICAL_NSAMPLES = 10  # min sample size from one the 4 categories to start significance test
-
-
-def get_fracs(syn_clusters):
-    """Gets fraction of synapses coming from assemblies (and for non-assembly saved with key: -1)"""
-    fracs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        pre_asssembly_idx = [int(label.split("assembly")[1]) for label in syn_cluster.columns.to_list()
-                             if label.split("assembly")[0] == '']
-        assembly_fracs = {pre_assembly_id: {} for pre_assembly_id in pre_asssembly_idx + [-1]}  # -1 for non-assembly
-        for pre_assembly_id in pre_asssembly_idx:
-            assembly_syns = syn_cluster["assembly%i" % pre_assembly_id]
-            assembly_fracs[pre_assembly_id] = len(assembly_syns[assembly_syns >= -1]) / len(assembly_syns)
-        non_assembly_syns = syn_cluster["non_assembly"]
-        assembly_fracs[-1] = len(non_assembly_syns[non_assembly_syns >= -1]) / len(non_assembly_syns)
-        fracs[assembly_id] = assembly_fracs
-    return fracs
-
-
-def get_change_probs(syn_clusters, diffs):
-    """Gets probabilities of potentiated, unchanged, and depressed synapses"""
-    probs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        assembly_diffs = diffs.loc[syn_cluster.index]
-        n_syns = len(assembly_diffs)
-        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0]), len(assembly_diffs[assembly_diffs < 0])
-        assembly_probs = np.array([potentiated, 0., depressed]) / n_syns
-        assembly_probs[1] = 1 - np.sum(assembly_probs)
-        probs[assembly_id] = assembly_probs
-    return probs
-
-
-def group_diffs(syn_clusters, diffs):
-    """
-    Groups efficacy differences (rho at last time step - rho at first time step) in sample neurons from assemblies
-    based on 2 criteria: 1) synapse is coming from assembly neuron vs. non-assembly neuron (fist key (-1 for non-assembly))
-                         2) synapse is part of a synapse cluster (clustering done in `assemblyfire`) vs. not (second key)
-    This seemed to be a good first implementation and `get_michelson_contrast()` below is based in this format...
-    but see `diffs2df()` below, which creates a DataFrame which is easier to understand
-    """
-    grouped_diffs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        pre_asssembly_idx = [int(label.split("assembly")[1]) for label in syn_cluster.columns.to_list()
-                             if label.split("assembly")[0] == '']
-        assembly_diffs = {pre_assembly_id: {} for pre_assembly_id in pre_asssembly_idx + [-1]}  # -1 for non-assembly
-        for pre_assembly_id in pre_asssembly_idx:
-            assembly_syns = syn_cluster["assembly%i" % pre_assembly_id]
-            assembly_diffs[pre_assembly_id][1] = diffs.loc[assembly_syns[assembly_syns >= 0].index]
-            assembly_diffs[pre_assembly_id][0] = diffs.loc[assembly_syns[assembly_syns == -1].index]
-        non_assembly_syns = syn_cluster["non_assembly"]
-        assembly_diffs[-1] = {1: diffs.loc[non_assembly_syns[non_assembly_syns >= 0].index],
-                              0: diffs.loc[non_assembly_syns[non_assembly_syns == -1].index]}
-        grouped_diffs[assembly_id] = assembly_diffs
-    return grouped_diffs
-
-
-def get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag, cross_assembly=False):
-    """Wrapper of other functions that together load and pre-calculate/group stuff for statistical tests and plotting"""
-    syn_clusters, gids = utils.load_synapse_clusters(project_name, seed, dir_tag, cross_assembly)
-    fracs = get_fracs(syn_clusters)
-    diffs = utils.get_synapse_changes(sim_path, report_name, gids)
-    probs = get_change_probs(syn_clusters, diffs)
-    grouped_diffs = group_diffs(syn_clusters, diffs)
-    return fracs, probs, grouped_diffs
 
 
 def _sort_keys(key_list):
@@ -112,20 +48,6 @@ def get_michelson_contrast(probs, grouped_diffs):
                     pot_contrast[i, j], dep_contrast[i, j] = np.nan, np.nan
         pot_contrasts[assembly_id], dep_contrasts[assembly_id] = pot_contrast, dep_contrast
     return pot_contrasts, dep_contrasts
-
-
-def diffs2df(grouped_diffs):
-    """Creates a DataFrame from `grouped_diffs` (easier to understand, plot and merge with extra morph. features)"""
-    dfs = []
-    for assembly_id, tmp in grouped_diffs.items():
-        for pre_assembly_id, diffs in tmp.items():
-            for clustered_int, clustered_bool in zip([0, 1], [False, True]):
-                df = diffs[clustered_int].to_frame()
-                df["assembly"] = assembly_id
-                df["pre_assembly"] = pre_assembly_id
-                df["clustered"] = clustered_bool
-                dfs.append(df)
-    return pd.concat(dfs).sort_index()
 
 
 def _prepare2statmodels(df, nsamples, seed=12345):
@@ -200,12 +122,11 @@ def main(project_name, dir_tag):
 
     for seed, sim_path in sim_paths.items():
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
-        _, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name, dir_tag)
+        _, probs, grouped_diffs, df = utils.get_grouped_syn_diffs(project_name, seed, sim_path, report_name, dir_tag)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         fig_name = os.path.join(figs_dir, "syn_clust_plast_seed%i.png" % seed)
         plot_2x2_cond_probs(probs, pot_contrasts, dep_contrasts, fig_name)
         # checking if the amount of any change is significant
-        df = diffs2df(deepcopy(grouped_diffs))
         # df = pd.concat([df, morph_df.loc[df.index]], axis=1)
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
         dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0])
@@ -215,15 +136,14 @@ def main(project_name, dir_tag):
 
         # same as above, but for cross assemblies
         # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
-        fracs, probs, grouped_diffs = get_grouped_diffs(project_name, seed, sim_path, report_name,
-                                                        dir_tag, cross_assembly=True)
+        fracs, probs, grouped_diffs, df = utils.get_grouped_syn_diffs(project_name, seed, sim_path, report_name,
+                                                                      dir_tag, cross_assembly=True)
         pot_contrasts, dep_contrasts = get_michelson_contrast(probs, grouped_diffs)
         for post_assembly, pot_contrast in pot_contrasts.items():
             fig_name = os.path.join(figs_dir, "cross_assembly%i_cond_probs_seed%i.png" % (post_assembly, seed))
             plot_nx2_cond_probs(probs[post_assembly], fracs[post_assembly],
                                 pot_contrast, dep_contrasts[post_assembly], post_assembly, fig_name)
         # checking if the amount of any change is significant
-        df = diffs2df(deepcopy(grouped_diffs))
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
         dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0])
         fig_name = os.path.join(figs_dir, "cross_assembly_diff_stats_seed%i.png" % seed)
