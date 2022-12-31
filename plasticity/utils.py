@@ -169,7 +169,7 @@ def get_tc_spikes(sim_config, t_start, t_end):
 
 def load_patterns(project_name, seed=None):
     """Loads in patterns from saved files (pretty custom structure and has a bunch of hard coded parts)"""
-    pklf_name = None
+    pklf_name, gids, pos = None, None, None
     seed_str = "seed%i" % seed if seed is not None else "seed"
     for f_name in os.listdir(os.path.join(SIMS_DIR, project_name, "input_spikes")):
         if f_name[-4:] == ".pkl" and seed_str in f_name and "pattern_gids" in f_name:
@@ -182,10 +182,9 @@ def load_patterns(project_name, seed=None):
             if pklf_name.split("__nc")[0] + ".txt" == f_name:
                 tmp = np.loadtxt(os.path.join(SIMS_DIR, project_name, "projections", f_name))
                 gids, pos = tmp[:, 0].astype(int), tmp[:, 1:]
-                return pattern_gids, gids, pos, metadata
-            else:
-                warnings.warn("Couldn't find saved positions in %s/projections" % project_name)
-                return pattern_gids, None, None, metadata
+        if pos is None:
+            warnings.warn("Couldn't find saved positions in %s/projections" % project_name)
+        return pattern_gids, gids, pos, metadata
     else:
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
