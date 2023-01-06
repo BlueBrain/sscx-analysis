@@ -78,14 +78,15 @@ def get_td_edge_dists(td_df):
     return ts[1:], dists
 
 
-def corr_pw_rate2change(sim_path, report_name, t_start, t_end):
+def corr_pw_rate2change(sim_path, report_name):
     """Correlate (builds DataFrame with 2 columns...) mean pairwise firing rates
     and the total change of mean (per connection) values"""
     gids, conn_idx, agg_data = utils.load_td_edges(sim_path, report_name, agg_fn="mean")
     assert agg_data.columns.name == "time", "Aggregated data is not in the expected format (columns should be `time`)"
+    t = agg_data.columns.get_level_values(0).to_numpy()
     df = (agg_data.iloc[:, -1] - agg_data.iloc[:, 0]).to_frame("delta")
     del agg_data
-    pw_rates = utils.get_gids_pairwise_avg_rates(Simulation(sim_path), gids, t_start, t_end)
+    pw_rates = utils.get_gids_pairwise_avg_rates(Simulation(sim_path), gids, t[0], t[-1])
     df["pw_rate"] = pw_rates[conn_idx["row"].to_numpy(), conn_idx["col"].to_numpy()]
     return df
 
@@ -126,11 +127,11 @@ def main(project_name):
         t_change, dists = get_td_edge_dists(td_df)
         fig_name = os.path.join(FIGS_DIR, project_name, "%std_edges_dist.png" % utils.midx2str(idx, level_names))
         plots.plot_agg_edge_dists(t_change.copy(), dists, fig_name)
-        rate_change_df = corr_pw_rate2change(sim_path, report_name, t[0], t[-1])
+        rate_change_df = corr_pw_rate2change(sim_path, report_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srate_vs_rho.png" % utils.midx2str(idx, level_names))
-        plots.plot_rate_vs_change(rate_change_df, report_name, fig_name)
+        plots.plot_rate_vs_change(rate_change_df, fig_name)
 
 
 if __name__ == "__main__":
-    project_name = "LayerWiseOUNoise_Ca1p05_PyramidPatterns"
+    project_name = "9fc285e9-96d8-44f4-9d44-b9a155b8d400"
     main(project_name)
