@@ -49,7 +49,7 @@ class CampaignAnalysisLauncher(Task):
         print(f'\nINFO: Loaded simulation campaign "{sim_campaign_cfg.name}" from {sim_campaign_cfg.get_url()} with coordinates {list(sim_paths.index.names)}')
         
         # Check if simulation results exist
-        valid_sims = [os.path.exists(os.path.join(p, 'out.dat')) for p in sim_paths]
+        valid_sims = [os.path.exists(os.path.join(p, 'BlueConfig.SUCCESS')) for p in sim_paths]
         sim_paths = sim_paths[valid_sims]
         
         print(f'INFO: Found {np.sum(valid_sims)} of {len(valid_sims)} completed simulations to analyze')
