@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 OUT_PATH = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/psp-validation/out"
-FIG_PATH = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/psp-validation/figures/"
+FIG_PATH = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures"
 SPIKE_TH = -30  # (mV) NEURON's built in spike threshold
 PSP_DETECTION_TH = 0.01  # mV (below which we consider the PSP undetected)
 MIN_TRIALS = 5  # min number of correct traces (after spike and failure filters)
