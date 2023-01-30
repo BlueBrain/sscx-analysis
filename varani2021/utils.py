@@ -1,6 +1,6 @@
 """
 SSCx related utility functions (most of them deal with the custom directory and file structure)
-author: András Ecker, last update: 02.2022
+author: András Ecker, last update: 01.2023
 """
 
 import os
@@ -70,16 +70,6 @@ def calc_rate(spike_times, N, t_start, t_end, bin_size=10):
     return rate / (N*1e-3*bin_size)  # *1e-3 ms to s conversion
 
 
-def get_tc_spikes(sim, t_start, t_end):
-    """Extracts spikes from BC stimulus block 'spikeReplay'"""
-    spikef_name = sim.config.Stimulus_spikeReplay.SpikeFile  # TODO: add some error handling...
-    f_name = spikef_name if os.path.isabs(spikef_name) else os.path.join(sim.config.Run_Default.CurrentDir, spikef_name)
-    tmp = np.loadtxt(f_name, skiprows=1)
-    spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)
-    idx = np.where((t_start < spike_times) & (spike_times < t_end))[0]
-    return spike_times[idx], spiking_gids[idx]
-
-
 def load_tc_gids(project_name):
     """Loads in VPM and POM gids from saved files"""
     vpm_gids, pom_gids = None, None
@@ -91,6 +81,33 @@ def load_tc_gids(project_name):
             if f_name[-4:] == ".txt" and "POM" in f_name:
                 pom_gids = np.loadtxt(os.path.join(proj_dir, f_name))[:, 0].astype(int)
     return vpm_gids, pom_gids
+
+
+def _get_spikef_name(config):
+    """Gets the name of the SpikeFile from bluepy.Simulation.config object"""
+    f_name = None
+    stims = config.typed_sections("Stimulus")
+    for stim in stims:
+        if hasattr(stim, "SpikeFile"):
+            f_name = stim.SpikeFile
+            break  # atm. it handles only a single (the first in order) SpikeFile... TODO: extend this
+    if f_name is not None:
+        f_name = f_name if os.path.isabs(f_name) else os.path.join(config.Run["CurrentDir"], f_name)
+    return f_name
+
+
+def get_tc_spikes(sim_config, t_start, t_end):
+    """Loads in input spikes (on projections) using the bluepy.Simulation.config object.
+    Returns the format used for plotting rasters and population rates"""
+    f_name = _get_spikef_name(sim_config)
+    if f_name is not None:
+        tmp = np.loadtxt(f_name, skiprows=1)
+        spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)
+        idx = np.where((t_start < spike_times) & (spike_times < t_end))[0]
+        return spike_times[idx], spiking_gids[idx]
+    else:
+        warnings.warn("No SpikeFile found in the BlueConfig, returning empty arrays.")
+        return np.array([]), np.array([], dtype=int)
 
 
 def _clean_voltages(gids, voltages, spiking):
