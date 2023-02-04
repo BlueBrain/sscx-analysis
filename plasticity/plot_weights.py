@@ -130,6 +130,8 @@ def main(project_name):
         bins, t, hist_data = utils.get_synapse_report_hist(h5f_name)
         hist_data = utils.update_hist_data(report_name, hist_data, bins)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srho_stack.png" % utils.midx2str(idx, level_names))
+        plots.plot_rho_stack(bins, t.copy(), hist_data, fig_name, split=False)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%srho_stack_split.png" % utils.midx2str(idx, level_names))
         plots.plot_rho_stack(bins, t.copy(), hist_data, fig_name)
         t_idx = int(len(t) / 2)
         _, middle_data = utils.load_synapse_report(h5f_name, t_start=t[t_idx], t_end=t[t_idx + 1])
