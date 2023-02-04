@@ -1,6 +1,6 @@
 """
 Plastic SSCx analysis related plots
-author: András Ecker, last update: 02.2022
+author: András Ecker, last update: 02.2023
 """
 
 import numpy as np
@@ -252,32 +252,20 @@ def plot_rho_hist(t, data, fig_name):
     cmap = plt.get_cmap("tab20", len(hue_order))
     colors = [cmap(i) for i in range(len(hue_order))]
     fig = plt.figure(figsize=(13, 6.5))
-    ax = fig.add_subplot(1, 4, 1)
-    sns.histplot(data=data[data["loc"] == "trunk"], y="rho", hue="post_mtype", multiple="stack",
+    ax = fig.add_subplot(1, 2, 1)
+    sns.histplot(data=data[data["loc"] == "apical"], y="rho", hue="post_mtype", multiple="stack",
                  bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax)
-    ax.set_title("trunk")
+    ax.set_title("apical")
     ax.set_ylim([0, 1])
     ax.set_ylabel("Rho at t = %s (s)" % t)
-    ax2 = fig.add_subplot(1, 4, 2)
-    sns.histplot(data=data[data["loc"] == "oblique"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax2)
-    ax2.set_title("oblique")
+    ax2 = fig.add_subplot(1, 2, 2)
+    sns.histplot(data=data[data["loc"] == "basal"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, ax=ax2)
+    ax2.set_title("basal")
     ax2.set_ylim([0, 1])
     ax2.set_ylabel("")
-    ax3 = fig.add_subplot(1, 4, 3)
-    sns.histplot(data=data[data["loc"] == "tuft"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax3)
-    ax3.set_title("tuft")
-    ax3.set_ylim([0, 1])
-    ax3.set_ylabel("")
-    ax4 = fig.add_subplot(1, 4, 4)
-    sns.histplot(data=data[data["loc"] == "basal"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, ax=ax4)
-    ax4.set_title("basal")
-    ax4.set_ylim([0, 1])
-    ax4.set_ylabel("")
-    plt.legend(handles=ax4.legend_.legendHandles, labels=[t.get_text() for t in ax4.legend_.texts],
-               title=ax4.legend_.get_title().get_text(), bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
+    plt.legend(handles=ax2.legend_.legendHandles, labels=[t.get_text() for t in ax2.legend_.texts],
+               title=ax2.legend_.get_title().get_text(), bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
     sns.despine(offset=2, trim=True)
     fig.tight_layout()
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
@@ -384,6 +372,23 @@ def plot_agg_edge_dists(ts, dists, fig_name):
     ax.set_xticks(xticks)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Norm. dist. in agg. conn. mat.")
+    sns.despine(trim=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_similarities_at_toffsets(t_offsets, mean_similarities, fig_name):
+    """Plots mean cosyne similarity vs. temporal separation of (significant) time bins"""
+    t_offsets = t_offsets / 1000  # ms -> s conversion
+    xticks = np.arange(0, t_offsets[-1]+30.1, 30)
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(t_offsets, mean_similarities, color="black", linewidth=1.5)
+    for t in xticks:
+        ax.axvline(t, color="gray", alpha=0.5, linewidth=0.5)
+    ax.set_xticks(xticks)
+    ax.set_xlabel("Minimum time difference (s)")
+    ax.set_ylabel("Mean similarity (within time window)")
     sns.despine(trim=True)
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
