@@ -434,23 +434,6 @@ def plot_agg_edge_dists(ts, dists, fig_name):
     plt.close(fig)
 
 
-def plot_similarities_at_toffsets(t_offsets, mean_similarities, fig_name):
-    """Plots mean cosyne similarity vs. temporal separation of (significant) time bins"""
-    t_offsets = t_offsets / 1000  # ms -> s conversion
-    xticks = np.arange(0, t_offsets[-1]+30.1, 30)
-    fig = plt.figure(figsize=(10, 6.5))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.plot(t_offsets, mean_similarities, color="black", linewidth=1.5)
-    for t in xticks:
-        ax.axvline(t, color="gray", alpha=0.5, linewidth=0.5)
-    ax.set_xticks(xticks)
-    ax.set_xlabel("Minimum time difference (s)")
-    ax.set_ylabel("Mean similarity (within time window)")
-    sns.despine(trim=True)
-    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
-    plt.close(fig)
-
-
 # duplicated from `analyse_syn_clusters.py`...
 def _sort_keys(key_list):
     """Sort keys of assembly idx. If -1 is part of the list (standing for non-assembly) then that comes last"""

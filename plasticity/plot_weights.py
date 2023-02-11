@@ -90,25 +90,6 @@ def corr_pw_rate2change(sim, gids, conn_idx, agg_data):
     return df
 
 
-def similarity_vs_t(h5f_name, seed, window_width=5000, window_shift=500):
-    """Mean cosyne similarity in sliding window over time differences (depends on `assemblyfire`)"""
-    from assemblyfire.utils import load_spikes_from_h5
-    from assemblyfire.clustering import cosine_similarity
-    from scipy.spatial.distance import pdist, squareform
-
-    # recalculate similarity matrix as that's not saved (only the binned spikes)
-    spike_matrix_dict, project_metadata = load_spikes_from_h5(h5f_name)
-    spike_matrix, t_bins = spike_matrix_dict[seed].spike_matrix, spike_matrix_dict[seed].t_bins
-    sim_matrix = cosine_similarity(spike_matrix.T)
-    np.fill_diagonal(sim_matrix, 0.)  # stupid numpy...
-    sim_matrix = squareform(sim_matrix)  # convert to upper triangular matrix
-    t_dists = pdist(t_bins.reshape(-1, 1))
-    t_offsets = np.arange(window_shift, np.max(t_dists) - window_width + window_shift, window_shift)
-    mean_sims = np.array([np.mean(sim_matrix[(t_offset < t_dists) & (t_dists < t_offset + window_width)])
-                          for t_offset in t_offsets])
-    return t_offsets, mean_sims
-
-
 def main(project_name):
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
@@ -154,14 +135,7 @@ def main(project_name):
         fig_name = os.path.join(FIGS_DIR, project_name, "%srate_vs_rho.png" % utils.midx2str(idx, level_names))
         plots.plot_rate_vs_change(rate_change_df, fig_name)
 
-        # plot similarity matrix (after running `assemblyfire`) vs. temporal offset
-        if len(level_names) == 0 and level_names[0] == "seed":
-            h5f_name = os.path.join(os.path.split(os.path.split(sim_path)[0])[0], "assemblies.h5")
-            t_offsets, mean_sims = similarity_vs_t(h5f_name, "seed%i" % idx)
-            fig_name = os.path.join(FIGS_DIR, project_name, "seed%i_sims_at_toffsets.png" % idx)
-            plots.plot_similarities_at_toffsets(t_offsets.copy(), mean_sims, fig_name)
-
 
 if __name__ == "__main__":
-    project_name = "3e3ef5bc-b474-408f-8a28-ea90ac446e24"
+    project_name = "19c8b9d7-5b06-435d-b93d-8277f0c858fe"
     main(project_name)
