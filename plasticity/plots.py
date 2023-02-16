@@ -1,6 +1,6 @@
 """
 Plastic SSCx analysis related plots
-author: András Ecker, last update: 02.2022
+author: András Ecker, last update: 02.2023
 """
 
 import numpy as np
@@ -252,54 +252,99 @@ def plot_rho_hist(t, data, fig_name):
     cmap = plt.get_cmap("tab20", len(hue_order))
     colors = [cmap(i) for i in range(len(hue_order))]
     fig = plt.figure(figsize=(13, 6.5))
-    ax = fig.add_subplot(1, 4, 1)
-    sns.histplot(data=data[data["loc"] == "trunk"], y="rho", hue="post_mtype", multiple="stack",
+    ax = fig.add_subplot(1, 2, 1)
+    sns.histplot(data=data[data["loc"] == "apical"], y="rho", hue="post_mtype", multiple="stack",
                  bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax)
-    ax.set_title("trunk")
+    ax.set_title("apical")
     ax.set_ylim([0, 1])
     ax.set_ylabel("Rho at t = %s (s)" % t)
-    ax2 = fig.add_subplot(1, 4, 2)
-    sns.histplot(data=data[data["loc"] == "oblique"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax2)
-    ax2.set_title("oblique")
+    ax2 = fig.add_subplot(1, 2, 2)
+    sns.histplot(data=data[data["loc"] == "basal"], y="rho", hue="post_mtype", multiple="stack",
+                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, ax=ax2)
+    ax2.set_title("basal")
     ax2.set_ylim([0, 1])
     ax2.set_ylabel("")
-    ax3 = fig.add_subplot(1, 4, 3)
-    sns.histplot(data=data[data["loc"] == "tuft"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, legend=False, ax=ax3)
-    ax3.set_title("tuft")
-    ax3.set_ylim([0, 1])
-    ax3.set_ylabel("")
-    ax4 = fig.add_subplot(1, 4, 4)
-    sns.histplot(data=data[data["loc"] == "basal"], y="rho", hue="post_mtype", multiple="stack",
-                 bins=30, binrange=(0, 1), hue_order=hue_order, palette=colors, ax=ax4)
-    ax4.set_title("basal")
-    ax4.set_ylim([0, 1])
-    ax4.set_ylabel("")
-    plt.legend(handles=ax4.legend_.legendHandles, labels=[t.get_text() for t in ax4.legend_.texts],
-               title=ax4.legend_.get_title().get_text(), bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
+    plt.legend(handles=ax2.legend_.legendHandles, labels=[t.get_text() for t in ax2.legend_.texts],
+               title=ax2.legend_.get_title().get_text(), bbox_to_anchor=(1.05, 1), loc=2, frameon=False)
     sns.despine(offset=2, trim=True)
     fig.tight_layout()
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_rho_stack(bins, t, data, fig_name):
+def plot_rho_stack(bins, t, data, fig_name, split=True):
     """Plots stacked time series of (binned) rho"""
     t /= 1000.  # ms to second
     n = data.shape[0]
-    assert len(bins)-1 == n
+    assert len(bins) - 1 == n
     cmap = plt.get_cmap("coolwarm", n)
     colors = [cmap(i) for i in range(n)]
-    fig = plt.figure(figsize=(10, 6.5))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.stackplot(t, data, colors=colors)
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=matplotlib.colors.BoundaryNorm(bins, cmap.N))
-    plt.colorbar(sm, ax=ax, ticks=bins, label="rho")
-    ax.set_xlim([t[0], t[-1]])
-    ax.set_xlabel("Time (s)")
-    ax.set_ylim([0, np.sum(data[:, 0])])
-    ax.set_ylabel("#Synapses")
+    fig = plt.figure(figsize=(10, 6.5))
+    if not split:  # simply use matplotlib's `stackplot`
+        ax = fig.add_subplot(1, 1, 1)
+        ax.stackplot(t, data, colors=colors)
+        plt.colorbar(sm, ax=ax, ticks=bins, label="rho")
+        ax.set_xlim([t[0], t[-1]])
+        ax.set_xlabel("Time (s)")
+        ax.set_ylim([0, np.sum(data[:, 0])])
+        ax.set_ylabel("#Synapses")
+    else:  # building a stackplot with `fill_between` on 4 subplots (2 logscaled)
+        assert np.mod(n, 2) == 0, "Logscaling splits depressed and potentiated synapses" \
+                                  "and is only possible with even number of bins"
+        n_pot, n_dep = data[-1, 0], data[0, 0]
+        pot_ratio = n_pot / (n_pot + n_dep)
+        # non-trivial `nt` bins and number of synapses within them
+        pot_idx, dep_idx = np.arange(int(n / 2), n - 1), np.arange(int(n / 2), 1, -1) - 1
+        n_nt_pot, n_nt_dep = np.sum([data[i, -1] for i in pot_idx]), np.sum([data[i, -1] for i in dep_idx])
+        nt_pot_ratio = n_nt_pot / (n_nt_pot + n_nt_dep)
+        height_ratios = [pot_ratio, nt_pot_ratio, 1 - nt_pot_ratio, 1 - pot_ratio]
+        gs = gridspec.GridSpec(4, 2, width_ratios=[40, 1], wspace=0.1, height_ratios=height_ratios, hspace=0.2)
+
+        # potentiated synapses
+        ax = fig.add_subplot(gs[0, 0])
+        all_pot = n_pot * np.ones_like(t)
+        ax.fill_between(t, all_pot - data[-1, :], all_pot, color=colors[-1])
+        ax.set_xlim([t[0], t[-1]])
+        ax.set_xticks([])
+        ax.set_ylim([1, n_pot])
+        ax.set_yscale("log")
+        sns.despine(ax=ax, bottom=True, trim=True, offset=2)
+        ax = fig.add_subplot(gs[1, 0])
+        low = np.zeros_like(t)
+        for i in pot_idx:
+            high = low + data[i, :]
+            ax.fill_between(t, low, high, color=colors[i])
+            low = high
+        ax.set_xlim([t[0], t[-1]])
+        ax.set_xticks([])
+        ax.set_ylim([0, n_nt_pot])
+        sns.despine(ax=ax, bottom=True, trim=True, offset=2)
+        # depressed synapses
+        ax = fig.add_subplot(gs[2, 0])
+        low = np.zeros_like(t)
+        for i in dep_idx:
+            high = low + data[i, :]
+            ax.fill_between(t, low, high, color=colors[i])
+            low = high
+        ax.set_xlim([t[0], t[-1]])
+        ax.set_xticks([])
+        ax.set_ylim([n_nt_dep, 0])
+        sns.despine(ax=ax, bottom=True, trim=True, offset=1)
+        ax = fig.add_subplot(gs[3, 0])
+        all_dep = n_dep * np.ones_like(t)
+        ax.fill_between(t, all_dep - data[0, :], all_dep, color=colors[0])
+        ax.set_xlim([t[0], t[-1]])
+        ax.set_xlabel("Time (s)")
+        ax.set_ylim([n_dep, 1])
+        ax.set_yscale("log")
+        sns.despine(ax=ax, trim=True, offset=2)
+
+        cax = fig.add_subplot(gs[:, 1])
+        fig.colorbar(sm, cax=cax, ticks=bins, label="rho")
+        fig.add_subplot(1, 1, 1, frameon=False)
+        plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+        plt.ylabel("#Synapses")
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
