@@ -7,7 +7,6 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import linregress
 from scipy.signal import correlate, correlation_lags
 from bluepy import Simulation
 
@@ -59,13 +58,11 @@ def bin_column_spikes(sim, hexes_from, bin_size, t_start=1000):
 
 
 def correlate_spike_counts(spike_counts_1, spike_counts_2, kernel_std=1):
-    """R-value of linear regression between Gaussian smoothed and mean centered spike counts"""
-    spike_counts_1 = gaussian_filter1d(spike_counts_1, kernel_std)
-    spike_counts_2 = gaussian_filter1d(spike_counts_2, kernel_std)
-    if np.max(spike_counts_1) != 0 and np.max(spike_counts_2) != 0:
-        norm_spike_counts_1 = spike_counts_1 - np.mean(spike_counts_1)
-        norm_spike_counts_2 = spike_counts_2 - np.mean(spike_counts_2)
-        return linregress(norm_spike_counts_1, norm_spike_counts_2).rvalue
+    """Correlation between Gaussian smoothed spike counts"""
+    spike_counts_1 = gaussian_filter1d(spike_counts_1.astype(float), kernel_std)
+    spike_counts_2 = gaussian_filter1d(spike_counts_2.astype(float), kernel_std)
+    if np.std(spike_counts_1) != 0 and np.std(spike_counts_2) != 0:
+        return np.corrcoef(spike_counts_1, spike_counts_2)[0, 1]
     else:
         return np.nan
 
@@ -73,8 +70,8 @@ def correlate_spike_counts(spike_counts_1, spike_counts_2, kernel_std=1):
 def cross_correlate_spike_counts(spike_counts_1, spike_counts_2, bin_size, kernel_std=1):
     """Max and (lag) of cross-correlation between Gaussian smoothed and mean centered spike counts
     (Normalized to be Pearson correlation not the `scipy.signal` dot product...)"""
-    spike_counts_1 = gaussian_filter1d(spike_counts_1, kernel_std)
-    spike_counts_2 = gaussian_filter1d(spike_counts_2, kernel_std)
+    spike_counts_1 = gaussian_filter1d(spike_counts_1.astype(float), kernel_std)
+    spike_counts_2 = gaussian_filter1d(spike_counts_2.astype(float), kernel_std)
     if np.std(spike_counts_1) != 0 and np.std(spike_counts_2) != 0:
         norm_spike_counts_1 = spike_counts_1 - np.mean(spike_counts_1)
         norm_spike_counts_2 = spike_counts_2 - np.mean(spike_counts_2)
@@ -119,5 +116,5 @@ if __name__ == "__main__":
     sim_root = "/gpfs/bbp.cscs.ch/project/proj83/scratch/bbp_workflow/sscx_calibration_mgfix/5-FullCircuit/" \
                "5-FullCircuit-2-BetterMinis-FprScan/5d83d4c2-693c-4ecc-a9da-c8dd2c8100c3/4/"
     # sim_root = "/gpfs/bbp.cscs.ch/project/proj83/scratch/bbp_workflow/sscx_calibration_mgfix/5-FullCircuit/" \
-    ##           "5-FullCircuit-2-BetterMinis-Fpr15-StimScan-10x/bb16bd9f-3d21-4a35-8296-d6aec4c55bf7/2/"
+    #            "5-FullCircuit-2-BetterMinis-Fpr15-StimScan-10x/bb16bd9f-3d21-4a35-8296-d6aec4c55bf7/2/"
     main(sim_root, hexes_from)
