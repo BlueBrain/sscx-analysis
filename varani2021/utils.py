@@ -12,6 +12,7 @@ import pandas as pd
 SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/scratch/home/ecker/simulations"
 SPIKE_TH = -30  # -30 mV is NEURON's built in spike threshold
 
+
 def ensure_dir(dir_path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -133,7 +134,7 @@ def get_voltages(sim, gids, t_start, t_end, spiking):
         data = report.get(t_start=t_start, t_end=t_end)
     t = data.index.to_numpy()
     voltages = data.to_numpy()
-    gids, voltages =  _clean_voltages(gids, voltages, spiking)
+    gids, voltages = _clean_voltages(gids, voltages, spiking)
     return gids, t, voltages.T
 
 
