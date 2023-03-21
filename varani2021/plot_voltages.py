@@ -51,7 +51,6 @@ def get_responsive_gids(non_spiking_gids, t, v_subtreshold, stim_start, t_window
     responsive_gids = []
     for (gid, voltage, peaks) in zip(non_spiking_gids, v_subtreshold, dvdt_peaks):
         if len(peaks):
-            # TODO: double check this...
             idx = np.where((stim_start < peaks) & (peaks < stim_start + t_window))[0]
             if len(idx):
                 responsive_gids.append(gid)
@@ -60,7 +59,7 @@ def get_responsive_gids(non_spiking_gids, t, v_subtreshold, stim_start, t_window
     return responsive_gids
 
 
-def main(sim, t_start, stim_start, t_end, fig_name_tag, debug=False, t_window=20):
+def main(project_name, sim, t_start, stim_start, t_end, fig_name_tag, debug=False, t_window=20):
     c = sim.circuit
     # get subthreshold L23 PC voltages
     gids = c.cells.ids({"$target": sim.target, Cell.LAYER: [2, 3], Cell.SYNAPSE_CLASS: "EXC"})
@@ -86,13 +85,13 @@ def main(sim, t_start, stim_start, t_end, fig_name_tag, debug=False, t_window=20
     return non_spiking_gids, t, np.mean(v_subtreshold, axis=0)
 
 
-def opto_main(sim, selected_gids, t_start, t_end, fig_name_tag):
+def opto_main(project_name, sim, selected_gids, t_start, t_end, plot_l4, fig_name_tag):
     c = sim.circuit
-    # check the effect of optogenetic stim. on L4 PCs
-    gids = c.cells.ids({"$target": sim.target, Cell.LAYER: 4, Cell.SYNAPSE_CLASS: "EXC"})
-    rate, _, v_spiking, _, v_subtreshold, _ = split_traces(sim, gids, t_start, t_end)
-    fig_name = os.path.join(FIGS_DIR, project_name, "%sL4PC_vs.png" % fig_name_tag)
-    plot_all_voltages(rate, v_spiking, v_subtreshold, t_start, t_end, fig_name)
+    if plot_l4:  # check the effect of optogenetic stim. on L4 PCs
+        gids = c.cells.ids({"$target": sim.target, Cell.LAYER: 4, Cell.SYNAPSE_CLASS: "EXC"})
+        rate, _, v_spiking, _, v_subtreshold, _ = split_traces(sim, gids, t_start, t_end)
+        fig_name = os.path.join(FIGS_DIR, project_name, "%sL4PC_vs.png" % fig_name_tag)
+        plot_all_voltages(rate, v_spiking, v_subtreshold, t_start, t_end, fig_name)
     # get subthreshold L23 PC voltages (just to make sure that the `selected_gids` are still subthreshold)
     gids = c.cells.ids({"$target": sim.target, Cell.LAYER: [2, 3], Cell.SYNAPSE_CLASS: "EXC"})
     _, _, _, non_spiking_gids, v_subtreshold, _ = split_traces(sim, gids, t_start, t_end)
@@ -103,24 +102,50 @@ def opto_main(sim, selected_gids, t_start, t_end, fig_name_tag):
 
 
 if __name__ == "__main__":
-    project_name = "ca341a69-224f-493e-841a-5f357d456bc6"
+    project_name = "84305a68-0537-4d55-807d-a03700c94204"  # "34f953d9-3521-42f7-87d9-f766acd2cfa7"
     t_start, stim_start, t_end = 1800, 2000, 3000
     sim_paths = utils.load_sim_paths(project_name)
     level_names = sim_paths.index.names
+    assert level_names[0] in ["opto_depol_pct", "from_layer"], "Atm. `opto_depol_pct` or `from_layer`" \
+                                                               "has to be the first index in the campaign"
+    tag = level_names[0]
+    plot_l4 = True if tag == "opto_depol_pct" else False
+    cm_name = "Greens" if tag == "opto_depol_pct" else ""  # leaving it empty will use seaborn's default colormap
     utils.ensure_dir(os.path.join(FIGS_DIR, project_name))
 
-    # TODO deal with multiindex later...
-    idx = sim_paths.index.to_numpy()
-    if len(level_names) == 1 and level_names[0] == "opto_depol_pct" and 0 in idx:
+    if len(level_names) == 1:
+        idx = sim_paths.index.to_numpy()
+        assert 0 in idx, "baseline sim (without modifications) has to be present"
         sim = Simulation(sim_paths.loc[0])
-        selected_gids, t, mean_ctrl_voltage = main(sim, t_start, stim_start, t_end, "opto_depol_pct0_")
+        selected_gids, t, mean_ctrl_voltage = main(project_name, sim, t_start, stim_start, t_end, "%s0_" % tag)
+
         mean_opto_voltages = {}
-        for opto_depol_pct in idx[np.nonzero(idx)]:
-            sim = Simulation(sim_paths.loc[opto_depol_pct])
-            mean_opto_voltages[opto_depol_pct] = opto_main(sim, selected_gids, t_start, t_end,
-                                                           "opto_depol_pct%i_" % opto_depol_pct)
-        plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages,
+        for tag_val in idx[np.nonzero(idx)]:
+            sim = Simulation(sim_paths.loc[tag_val])
+            mean_opto_voltages[tag_val] = opto_main(project_name, sim, selected_gids, t_start, t_end, plot_l4,
+                                                    "%s%i_" % (tag, tag_val))
+        plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages, cm_name,
                            os.path.join(FIGS_DIR, project_name, "mean_L23PC_voltages.png"))
+
+    elif len(level_names) == 2:
+        tag_vals = np.unique(sim_paths.index.get_level_values(tag))
+        key = level_names[1]
+        vals = np.unique(sim_paths.index.get_level_values(key))
+        for val in vals:
+            sim = Simulation(sim_paths.loc[0, val])
+            selected_gids, t, mean_ctrl_voltage = main(project_name, sim, t_start, stim_start, t_end,
+                                                       "%s0_%s%i_" % (tag, key, val))
+
+            mean_opto_voltages = {}
+            for tag_val in tag_vals[np.nonzero(tag_vals)]:
+                sim = Simulation(sim_paths.loc[tag_val, val])
+                mean_opto_voltages[tag_val] = opto_main(project_name, sim, selected_gids, t_start, t_end, plot_l4,
+                                                        "%s%i_%s%i_" % (tag, tag_val, key, val))
+            plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages, cm_name,
+                               os.path.join(FIGS_DIR, project_name, "%s%i_mean_L23PC_voltages.png" % (key, val)))
+
+    # TODO: deal with more than one extra coordinates ...
+
 
 
 
