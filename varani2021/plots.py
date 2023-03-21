@@ -195,16 +195,20 @@ def plot_selected_voltages(v_subtreshold, t_start, t_end, fig_name):
     plt.close(fig)
 
 
-def plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages, fig_name):
+def plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages, cm_name, fig_name):
     """Plot mean voltages at different opto. depol. percents"""
+    opto_depol_pcts = np.sort(list(mean_opto_voltages.keys()))
+    if cm_name != "":
+        cm = sns.color_palette(cm_name, as_cmap=True)
+        colors = [cm(i) for i in np.linspace(0.3, 0.8, len(opto_depol_pcts))]
+    else:
+        colors = sns.color_palette(n_colors=len(opto_depol_pcts))
+
     fig = plt.figure(figsize=(10, 6.5))
     ax = fig.add_subplot(1, 1, 1)
     ax.plot(t, mean_ctrl_voltage, "k-", label="control")
-    opto_depol_pcts = np.sort(list(mean_opto_voltages.keys()))
-    cm = sns.color_palette("Greens", as_cmap=True)
-    col_idx = np.linspace(0.3, 0.8, len(opto_depol_pcts))
-    for i, opto_depol_pct in enumerate(opto_depol_pcts):
-        ax.plot(t, mean_opto_voltages[opto_depol_pct], color=cm(col_idx[i]), label="%i%%" % opto_depol_pct)
+    for opto_depol_pct, color in zip(opto_depol_pcts, colors):
+        ax.plot(t, mean_opto_voltages[opto_depol_pct], color=color, label="%i%%" % opto_depol_pct)
     ax.legend(frameon=False)
     ax.set_xlim([t[0], t[-1]])
     ax.set_ylim([np.min(mean_ctrl_voltage), np.max(mean_ctrl_voltage)])
