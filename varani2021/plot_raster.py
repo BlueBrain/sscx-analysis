@@ -15,7 +15,7 @@ FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj83/home/ecker/figures/sscx-analysis"
 
 def get_tc_rates(sim, t_start, t_end):
     """Read VPM and POm spikes from spike replay file"""
-    spike_times, spiking_gids = utils.get_tc_spikes(sim, t_start, t_end)
+    spike_times, spiking_gids = utils.get_tc_spikes(sim.config, t_start, t_end)
     vpm_gids, pom_gids = utils.load_tc_gids(os.path.split(sim.config.Run_Default.CurrentDir)[0])
     proj_rate_dict = {}
     for proj_name, proj_gids in zip(["VPM", "POm"], [vpm_gids, pom_gids]):
@@ -29,7 +29,7 @@ def get_tc_rates(sim, t_start, t_end):
 
 
 if __name__ == "__main__":
-    project_name = "e3dbb0eb-e148-4bf2-8b0e-82aa03b8fe7a"
+    project_name = "34f953d9-3521-42f7-87d9-f766acd2cfa7"
     t_start = 1500
 
     sim_paths = utils.load_sim_paths(project_name)

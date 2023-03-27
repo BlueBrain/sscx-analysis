@@ -106,23 +106,25 @@ def plot_raster(spike_times, spiking_gids, proj_rate_dict, asthetics, t_start, t
     plt.close(fig)
 
 
-def plot_voltages(gids, t, voltages, fig_name):
-    """Plots voltage traces"""
-    fig = plt.figure(figsize=(20, 9))
-    gs = gridspec.GridSpec(len(gids), 1)
-    for i in range(len(gids)):
-        ax = fig.add_subplot(gs[i])
-        ax.plot(t, voltages[i, :], "k-")
-        ax.set_xlim([t[0], t[-1]])
-        ax.set_ylabel("a%s" % gids[i])
-    ax.set_xlabel("Time (ms)")
+def plot_dvdt(t, v, fig_name):
+    """Plots voltage trace and its derivative"""
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(2, 1, 1)
+    ax.plot(t, v, "k-")
+    ax.set_xlim([t[0], t[-1]])
+    ax.set_ylabel("V (mV)")
+    ax2 = fig.add_subplot(2, 1, 2)
+    ax2.plot(t, np.gradient(v, t[1] - t[0]), "r-")
+    ax2.set_xlabel("Time (ms)")
+    ax2.set_xlim([t[0], t[-1]])
+    ax2.set_ylabel("dV/dt")
     sns.despine()
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
 
 
-def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
+def plot_all_voltages(rate, v_spiking, v_subtreshold, t_start, t_end, fig_name):
     """Plots voltage collages of spiking and non-spiking cells"""
     v_subtreshold_mean = np.mean(v_subtreshold, axis=0)
     t_v = np.linspace(t_start, t_end, len(v_subtreshold_mean))
@@ -136,7 +138,7 @@ def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     ax.plot(t_rate, rate, color=RED)
     ax.fill_between(t_rate, np.zeros_like(t_rate), rate, color=RED, alpha=0.1)
     ax.set_xticks(xticks)
-    ax.set_xlim(t_start, t_end)
+    ax.set_xlim([t_start, t_end])
     ax.set_ylabel("Rate (Hz)")
     sns.despine(ax=ax)
     ax2 = fig.add_subplot(gs[1, 0])
@@ -155,7 +157,7 @@ def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     ax4 = fig.add_subplot(gs[3, 0])
     ax4.plot(t_v, v_subtreshold_mean, "k-")
     ax4.set_xticks(xticks)
-    ax4.set_xlim(t_start, t_end)
+    ax4.set_xlim([t_start, t_end])
     ax4.set_xlabel("Time (ms)")
     ax4.set_ylabel("V (mV)")
     ax4.set_yticks([np.floor(np.mean(v_subtreshold_mean))])
@@ -164,17 +166,55 @@ def plot_all_voltages(v_spiking, v_subtreshold, rate, t_start, t_end, fig_name):
     gs.tight_layout(fig, h_pad=0.2, w_pad=0.2)
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
-    
-    
-def plot_epsps_amplitudes(epsps, fig_name):
-    """Plots EPSP amplitudes of non-spiking cells"""
-    range = [0, np.max(epsps)]
-    fig = plt.figure(figsize=(10, 6.5))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.hist(epsps, bins=30, range=range, color="gray")
-    ax.set_xlim(range)
-    ax.set_xlabel("EPSP amplitude (mV)")
-    sns.despine(offset=5, trim=True)
+
+
+def plot_selected_voltages(v_subtreshold, t_start, t_end, fig_name):
+    """Same as the bottom part of `plot_all_voltages` above..."""
+    v_subtreshold_mean = np.mean(v_subtreshold, axis=0)
+    t_v = np.linspace(t_start, t_end, len(v_subtreshold_mean))
+    xticks = np.linspace(t_start, t_end, 6).astype(int)
+
+    fig = plt.figure(figsize=(20, 9))
+    gs = gridspec.GridSpec(2, 2, height_ratios=[5, 1], width_ratios=[69, 1])
+    ax = fig.add_subplot(gs[0, 0])
+    i = ax.imshow(v_subtreshold, cmap="inferno", aspect="auto", origin="lower")
+    plt.colorbar(i, cax=fig.add_subplot(gs[0, 1]))
+    ax.set_xticks(np.linspace(-0.5, v_subtreshold.shape[1] - 0.5, 6))
+    ax.set_xticklabels(xticks)
+    ax.set_ylabel("Responsive non-spiking gids")
+    ax2 = fig.add_subplot(gs[1, 0])
+    ax2.plot(t_v, v_subtreshold_mean, "k-")
+    ax2.set_xticks(xticks)
+    ax2.set_xlim([t_start, t_end])
+    ax2.set_xlabel("Time (ms)")
+    ax2.set_ylabel("V (mV)")
+    sns.despine(ax=ax2, trim=True)
+    fig.align_ylabels()
+    gs.tight_layout(fig, h_pad=0.2, w_pad=0.2)
     fig.savefig(fig_name, bbox_inches="tight", dpi=100)
     plt.close(fig)
+
+
+def plot_mean_voltages(t, mean_ctrl_voltage, mean_opto_voltages, cm_name, fig_name):
+    """Plot mean voltages at different opto. depol. percents"""
+    opto_depol_pcts = np.sort(list(mean_opto_voltages.keys()))
+    if cm_name != "":
+        cm = sns.color_palette(cm_name, as_cmap=True)
+        colors = [cm(i) for i in np.linspace(0.3, 0.8, len(opto_depol_pcts))]
+    else:
+        colors = sns.color_palette(n_colors=len(opto_depol_pcts))
+
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(t, mean_ctrl_voltage, "k-", label="control")
+    for opto_depol_pct, color in zip(opto_depol_pcts, colors):
+        ax.plot(t, mean_opto_voltages[opto_depol_pct], color=color, label="%i%%" % opto_depol_pct)
+    ax.legend(frameon=False)
+    ax.set_xlim([t[0], t[-1]])
+    ax.set_ylim([np.min(mean_ctrl_voltage), np.max(mean_ctrl_voltage)])
+    sns.despine(trim=True, offset=2)
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 
