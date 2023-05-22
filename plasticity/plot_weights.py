@@ -1,6 +1,6 @@
 """
 Plot evolution of synaptic weights (in plasticity simulations) over time
-author: András Ecker, last update: 02.2023
+author: András Ecker, last update: 05.2023
 """
 
 import os
@@ -20,9 +20,14 @@ def get_total_change_by(sim_path, report_name, split_by="layer", return_data=Fal
     h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
     data = utils.load_synapse_report(h5f_name, return_idx=True)
     split_data = utils.split_synapse_report(c, data, split_by)
+    del data
     split_data = utils.update_split_data(c, report_name, split_data, split_by)
     diffs = {key: val[-1]-val[0] for key, val in split_data.items()}
-    return data, diffs if return_data else diffs
+    if not return_data:
+        return diffs
+    else:
+        data = np.hstack([val for _, val in split_data.items()])
+        return data, diffs
 
 
 def get_transition_matrix(data, bins):
@@ -101,9 +106,9 @@ def main(project_name):
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_pies.png" % utils.midx2str(idx, level_names))
         plots.plot_gmax_change_pie(diffs, fig_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_delta_hists.png" % utils.midx2str(idx, level_names))
-        plots.plot_gmax_change_hist(data.to_numpy(), fig_name)
+        plots.plot_gmax_change_hist(data, fig_name)
         fig_name = os.path.join(FIGS_DIR, project_name, "%sgmax_AMPA_hists.png" % utils.midx2str(idx, level_names))
-        plots.plot_gmax_dists(data.to_numpy(), fig_name)
+        plots.plot_gmax_dists(data, fig_name)
 
         report_name = "rho"
         h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
@@ -137,5 +142,5 @@ def main(project_name):
 
 
 if __name__ == "__main__":
-    project_name = "19c8b9d7-5b06-435d-b93d-8277f0c858fe"
+    project_name = "d132adc8-2507-4a4e-8825-f9639d8d17e1"
     main(project_name)

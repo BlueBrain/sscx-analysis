@@ -1,6 +1,6 @@
 """
 Plastic SSCx analysis related plots
-author: András Ecker, last update: 02.2023
+author: András Ecker, last update: 05.2023
 """
 
 import numpy as np
@@ -197,16 +197,17 @@ def plot_gmax_dists(gmax, fig_name):
 def plot_gmax_change_hist(gmax, fig_name):
     """Plots changes in gmax distribution over time"""
     gmax_change = np.diff(gmax, axis=0) * 1000
-    gmax_change[gmax_change == 0.] = np.nan
-    gmax_change_95p = np.nanpercentile(np.abs(gmax_change), 95)
+    gmax_change_95p = np.percentile(np.abs(gmax_change[gmax_change != 0.]), 95)
     n_tbins = gmax_change.shape[0]
 
     fig = plt.figure(figsize=(10, 6.5))
     gs = gridspec.GridSpec(n_tbins, 1)
     for i in range(n_tbins):
         ax = fig.add_subplot(gs[i, 0])
-        pos_hist, bin_edges = numba_hist(gmax_change[gmax_change > 0], 30, (0, gmax_change_95p))
-        neg_hist, _ = numba_hist(gmax_change[gmax_change < 0], 30, (-1 * gmax_change_95p, 0))
+        gmax_change_n = gmax_change[i, :]
+        gmax_change_n = gmax_change_n[gmax_change_n != 0.]
+        pos_hist, bin_edges = numba_hist(gmax_change_n[gmax_change_n > 0], 30, (0, gmax_change_95p))
+        neg_hist, _ = numba_hist(gmax_change_n[gmax_change_n < 0], 30, (-1 * gmax_change_95p, 0))
         bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
         width = bin_centers[1] - bin_centers[0]
         ax.bar(bin_centers, pos_hist, width=width, color=RED, edgecolor="black", lw=0.5)
