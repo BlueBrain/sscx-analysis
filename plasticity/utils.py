@@ -287,7 +287,7 @@ def get_all_synapses_at_t(sim_path, report_name, t):
     data.columns = pd.Index([report_name])
     # load non-reported values, convert them to float DF and merge the 2 datasets
     nonrep_data = load_nonrep_syn_df(report_name)
-    data = data.append(nonrep_data.to_frame().astype(np.float64))
+    data = pd.concat([data, nonrep_data.to_frame().astype(np.float64)])
     data.sort_index(inplace=True)
     return report_t, data
 
