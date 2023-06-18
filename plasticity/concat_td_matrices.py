@@ -69,6 +69,7 @@ if __name__ == "__main__":
             if level_name == "seed":
                 seed = mi[i]
             elif "pattern" in level_name:
+                patterns_level_name = level_name
                 pattern = mi[i]
             else:
                 warnings.warn("Unknown MultiIndex level name: %s" % level_name)
@@ -79,7 +80,8 @@ if __name__ == "__main__":
     edges = pd.concat(edges, axis=1, copy=False)
 
     h5f_name = os.path.join(os.path.split(os.path.split(sim_path)[0])[0], "grouped_td_edges_%s.h5" % report_name)
-    # seeds and patterns will come from the MI
-    edges_to_h5(h5f_name, nodes, edge_idx, edges_at_0, edges, seeds=[], patterns=[])
+    edges_to_h5(h5f_name, nodes, edge_idx, edges_at_0, edges,
+                seeds=sim_paths.index.get_level_values("seed").unique().to_numpy().tolist(),
+                patterns=sim_paths.index.get_level_values(level_name).unique().to_numpy().tolist())
 
 
