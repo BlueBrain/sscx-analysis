@@ -83,7 +83,6 @@ def _prepare2statmodels(df, nsamples, seed=12345):
 
 def _prepare2statannotations(tukey_df):
     """Prepares "pairs" for plotting with `statannotations` (with custom p-values)"""
-    tukey_df.loc[tukey_df["reject"] == True]
     pairs, p_vals = [], []
     for _, row in tukey_df.loc[tukey_df["reject"] == True].iterrows():
         pairs.append((row["group1"], row["group2"]))
@@ -153,5 +152,5 @@ def main(project_name, dir_tag):
 
 if __name__ == "__main__":
     dir_tag = ""
-    project_name = "LayerWiseOUNoise_Ca1p05_PyramidPatterns"
+    project_name = "3e3ef5bc-b474-408f-8a28-ea90ac446e24"
     main(project_name, dir_tag)
