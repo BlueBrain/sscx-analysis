@@ -80,7 +80,7 @@ def get_assembly_change_probs(assembly_grp, df):
     dep_probs = np.zeros((len(assembly_grp), len(assembly_grp)), dtype=np.float32)
     pot_probs = np.zeros_like(dep_probs)
     for i, pre_assemly in enumerate(assembly_grp.assemblies):
-        df_pre = df.loc[df["pre_gid"].isin(pre_assemly.gids)]
+        df_pre = df.loc[df["pre_gid"].isin(pre_assembly.gids)]
         for j, post_assembly in enumerate(assembly_grp.assemblies):
             df_pre_post = df_pre.loc[df_pre["post_gid"].isin(post_assembly.gids)]
             dep_probs[i, j] = len(df_pre_post.loc[df_pre_post[var] < 0.]) / len(df_pre_post)
