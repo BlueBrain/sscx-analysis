@@ -292,6 +292,23 @@ def get_all_synapses_at_t(sim_path, report_name, t):
     return report_t, data
 
 
+def get_all_synapse_changes(sim_path, report_name):
+    """Gets total change (last reported t - first reported t) of all (reported and non-reported) synapses"""
+    h5f_name = os.path.join(os.path.split(sim_path)[0], "%s.h5" % report_name)
+    data = load_synapse_report(h5f_name, t_start=0, t_end=-1, return_idx=True)
+    mapping_df = load_mapping_df()
+    data = reindex_report(data, mapping_df)
+    deltas = pd.Series(data=np.diff(data.to_numpy(), axis=1).reshape(-1),
+                       index=data.index, name="delta_%s" % report_name)
+    del data
+    nonrep_data = load_nonrep_syn_df(report_name)  # just load them for the idx
+    nonrep_deltas = pd.Series(data=np.zeros(len(nonrep_data), dtype=np.float32),
+                              index=nonrep_data.index, name="delta_%s" % report_name)
+    deltas = pd.concat([deltas, nonrep_deltas])
+    deltas.sort_index(inplace=True)
+    return deltas
+
+
 def get_synapse_changes(sim_path, report_name, gids):
     """Gets total change (last reported t - first reported t) of synapses on `gids`"""
     from bluepy import Circuit

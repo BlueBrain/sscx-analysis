@@ -12,6 +12,7 @@ import utils
 import plots
 
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/sscx-analysis"
+ASSEMBLY_FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/v7_assemblies"
 
 
 def get_total_change_by(sim_path, report_name, split_by="layer", return_data=False):
@@ -63,11 +64,37 @@ def get_all_synapses_tend(sim_path, report_name):
     return t, df
 
 
+def get_all_synapse_diffs(sim_path, report_name):
+    """Loads first and last time step of report, takes diff., reindexes it, updates it with non-reported data,
+    and loads pre-post gids (for being able to index out assembly neurons)"""
+    df = utils.load_extra_morph_features(["pre_gid", "post_gid"])
+    diffs = utils.get_all_synapse_changes(sim_path, report_name)
+    # df = df.merge(deltas, left_index=True, right_index=True)  # no time for this...
+    df[diffs.name] = diffs.to_numpy()
+    return df
+
+
+def get_assembly_change_probs(assembly_grp, df):
+    """Calculates depression/potentiation probabilities (of synapses) between assemblies"""
+    var = np.setdiff1d(df.columns.to_numpy(), np.array(["pre_gid", "post_gid"]), assume_unique=True)[0]
+    dep_probs = np.zeros((len(assembly_grp), len(assembly_grp)), dtype=np.float32)
+    pot_probs = np.zeros_like(dep_probs)
+    for i, pre_assemly in enumerate(assembly_grp.assemblies):
+        df_pre = df.loc[df["pre_gid"].isin(pre_assemly.gids)]
+        for j, post_assembly in enumerate(assembly_grp.assemblies):
+            df_pre_post = df_pre.loc[df_pre["post_gid"].isin(post_assembly.gids)]
+            dep_probs[i, j] = len(df_pre_post.loc[df_pre_post[var] < 0.]) / len(df_pre_post)
+            pot_probs[i, j] = len(df_pre_post.loc[df_pre_post[var] > 0.]) / len(df_pre_post)
+            del df_pre_post
+        del df_pre
+    return dep_probs, pot_probs
+
+
 def get_mean_rho_matrix(df):
     """Gets pathway specific mean rho matrix based on the output of `get_all_synapses_tend()` above"""
     mtypes = np.sort(df["post_mtype"].unique())
     mean_rhos, sum_rhos = np.zeros((len(mtypes), len(mtypes))), np.zeros((len(mtypes), len(mtypes)))
-    for i, mtype in enumerate(mtypes):
+    for i, mtype in enumerate(mtypes):  # could be done in one groupby but whatever...
         df_mtype = df.loc[df["pre_mtype"] == mtype]
         mean_rhos[i, :] = df_mtype.groupby("post_mtype").mean("rho").to_numpy().reshape(-1)
         sum_rhos[i, :] = df_mtype.groupby("post_mtype").sum("rho").to_numpy().reshape(-1)
@@ -139,8 +166,18 @@ def main(project_name):
         rate_change_df = corr_pw_rate2change(Simulation(sim_path), gids, conn_idx, agg_data)
         fig_name = os.path.join(FIGS_DIR, project_name, "%srate_vs_rho.png" % utils.midx2str(idx, level_names))
         plots.plot_rate_vs_change(rate_change_df, fig_name)
+        # plot change probs. between assemblies (if they exist)
+        h5f_name = os.path.join(os.path.split(os.path.split(sim_path)[0])[0], "assemblies.h5")
+        if len(level_names) == 1 and level_names[0] == "seed" and os.path.isfile(h5f_name):
+            from assemblyfire.utils import load_assemblies_from_h5
+            assembly_grp_dict, _ = load_assemblies_from_h5(h5f_name)
+            assembly_grp = assembly_grp_dict["seed%i" % idx]
+            df = get_all_synapse_diffs(sim_path, report_name)
+            dep_probs, pot_probs = get_assembly_change_probs(assembly_grp, df)
+            fig_name = os.path.join(ASSEMBLY_FIGS_DIR, project_name, "cross_assembly_plast_probs_seed%i.png" % idx)
+            plots.plot_change_probs(dep_probs, pot_probs, fig_name)
 
 
 if __name__ == "__main__":
-    project_name = "d132adc8-2507-4a4e-8825-f9639d8d17e1"
+    project_name = "3e3ef5bc-b474-408f-8a28-ea90ac446e24"
     main(project_name)

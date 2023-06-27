@@ -371,6 +371,24 @@ def plot_mean_rho_matrix(t, mtypes, rho_matrix, fig_name):
     plt.close(fig)
 
 
+def plot_change_probs(dep_probs, pot_probs, fig_name):
+    """Plots probs. of change between assemblies (or actually whatever if they're passed as a 2D arrays)"""
+    fig = plt.figure(figsize=(13, 6.5))
+    ax = fig.add_subplot(1, 2, 1)
+    i = ax.imshow(100 * dep_probs, cmap="Blues", aspect="auto")
+    plt.colorbar(i, label="Prob. of depression (%)")
+    ax.set_xlabel("To (assembly)")
+    ax.set_ylabel("From (assembly)")
+    ax2 = fig.add_subplot(1, 2, 2)
+    i2 = ax2.imshow(100 * pot_probs, cmap="Reds", aspect="auto")
+    plt.colorbar(i2, label="Prob. of potentiation (%)")
+    ax.set_xlabel("To (assembly)")
+    ax.set_ylabel("From (assembly)")
+    fig.tight_layout()
+    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    plt.close(fig)
+
+
 def plot_transition_matrix(transition_matrix, bins, fig_name):
     """Plots transition matrix (on log scale)"""
     cmap = plt.get_cmap("inferno").copy()
