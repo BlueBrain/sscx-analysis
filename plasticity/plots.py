@@ -4,7 +4,7 @@ author: András Ecker, last update: 05.2023
 """
 
 import numpy as np
-from utils import ensure_dir, numba_hist
+from utils import ensure_dir, numba_hist, sort_assembly_keys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -451,16 +451,6 @@ def plot_agg_edge_dists(ts, dists, fig_name):
     sns.despine(trim=True)
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
-
-
-# duplicated from `analyse_syn_clusters.py`...
-def _sort_keys(key_list):
-    """Sort keys of assembly idx. If -1 is part of the list (standing for non-assembly) then that comes last"""
-    if -1 not in key_list:
-        return np.sort(key_list)
-    else:
-        keys = np.array(key_list)
-        return np.concatenate((np.sort(keys[keys >= 0]), np.array([-1])))
     
 
 def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
@@ -477,13 +467,15 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
     pot_extr = np.max([np.nanmax(np.abs(pot_matrix)) for _, pot_matrix in pot_matrices.items()])
     dep_extr = np.max([np.nanmax(np.abs(dep_matrix)) for _, dep_matrix in dep_matrices.items()])
 
-    assembly_idx = _sort_keys(list(probs.keys()))
+    assembly_idx = sort_assembly_keys(list(probs.keys()))
     n = len(assembly_idx)
     fig = plt.figure(figsize=(20, 8))
     gs = gridspec.GridSpec(3, n+1, width_ratios=[10 for i in range(n)] + [1])
     for i, assembly_id in enumerate(assembly_idx):
         ax = fig.add_subplot(gs[0, i])
-        ax.pie(probs[assembly_id], labels=["%.2f%%" % (prob * 100) for prob in probs[assembly_id]],
+        probs_plot = np.array([probs[assembly_id]["pot"], 0, probs[assembly_id]["dep"]])
+        probs_plot[1] = 1 - np.sum(probs_plot)
+        ax.pie(probs_plot, labels=["%.2f%%" % (prob * 100) for prob in probs_plot],
                colors=[RED, "lightgray", BLUE], normalize=True)
         ax.set_title("assembly %i" % assembly_id)
         ax2 = fig.add_subplot(gs[1, i])
@@ -502,7 +494,7 @@ def plot_2x2_cond_probs(probs, pot_matrices, dep_matrices, fig_name):
         ax3.set_xticks([0, 1])
         ax3.set_xticklabels(["clustered", "not clustered"], rotation=45)
     fig.colorbar(i_pot, cax=fig.add_subplot(gs[1, i+1]), label="P(pot|cond) - P(pot) /\n P(pot|cond) + P(pot)")
-    fig.colorbar(i_dep, cax=fig.add_subplot(gs[2, i+1]), label="P(dep|cond) - P(pot) /\n P(dep|cond) + P(pot)")
+    fig.colorbar(i_dep, cax=fig.add_subplot(gs[2, i+1]), label="P(dep|cond) - P(dep) /\n P(dep|cond) + P(dep)")
     fig.tight_layout()
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
@@ -525,10 +517,13 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, post_assembly_id, 
     fig = plt.figure(figsize=(10, 6.5))
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 3])
     ax = fig.add_subplot(gs[0, 0])
-    ax.pie(probs, labels=["%.2f%%" % (prob * 100) for prob in probs], colors=[RED, "lightgray", BLUE], normalize=True)
+    probs_plot = np.array([probs["pot"], 0, probs["dep"]])
+    probs_plot[1] = 1 - np.sum(probs_plot)
+    ax.pie(probs_plot, labels=["%.2f%%" % (prob * 100) for prob in probs_plot],
+           colors=[RED, "lightgray", BLUE], normalize=True)
     ax.set_title("post assembly %i" % post_assembly_id)
-    tmp = _sort_keys(list(fracs.keys()))
-    ys = np.append(np.arange(len(tmp[:-1])), -1)
+    tmp = sort_assembly_keys(list(fracs.keys()))
+    ys = np.append(np.arange(len(tmp[:-1]), 0, -1), 0)
     yticklabels = ["pre assembly %i" % i for i in tmp[:-1]] + ["non-assembly"]
     width = [fracs[key] for key in tmp]
     ax2 = fig.add_subplot(gs[0, 1])
@@ -546,7 +541,7 @@ def plot_nx2_cond_probs(probs, fracs, pot_matrix, dep_matrix, post_assembly_id, 
     ax3.set_xticklabels(["clustered", "not clustered"], rotation=45)
     ax4 = fig.add_subplot(gs[1, 1])
     i_dep = ax4.imshow(dep_matrix, cmap=dep_cmap, aspect="auto", vmin=-dep_extr, vmax=dep_extr)
-    fig.colorbar(i_dep, label="P(dep|cond) - P(pot) /\n P(dep|cond) + P(pot)")
+    fig.colorbar(i_dep, label="P(dep|cond) - P(dep) /\n P(dep|cond) + P(dep)")
     ax4.set_yticks([])
     ax4.set_xticks([0, 1])
     ax4.set_xticklabels(["clustered", "not clustered"], rotation=45)

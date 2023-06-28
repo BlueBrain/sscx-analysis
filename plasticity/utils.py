@@ -1,6 +1,6 @@
 """
 Plastic SSCx related utility functions (most of them deal with the custom directory and file structure)
-author: András Ecker, last update: 06.2022
+author: András Ecker, last update: 06.2023
 """
 
 import os
@@ -189,22 +189,38 @@ def load_patterns(project_name, seed=None):
         raise RuntimeError("Couldn't find saved *pattern_gids*.pkl in %s/input_spikes" % project_name)
 
 
+def _simplify_synapse_cluster_df(df, post_assembly_id):
+    """The format of synapse clusters saved by `assemblyfire` is pretty detailed,
+    but here we only need pre-post assembly ID and the fact that the synapses is clustered/non-clustered,
+    thus this helper function simplifies the loaded DataFrame"""
+    pre_assemblies = np.setdiff1d(df.columns.to_numpy(), np.array(["pre_gid", "post_gid", "non_assembly"]))
+    df["pre_assembly"] = -1
+    for pre_assembly in pre_assemblies:
+        df.loc[df[pre_assembly] != -100, "pre_assembly"] = int(pre_assembly.split("assembly")[1])
+    df["post_assembly"] = post_assembly_id
+    df["clustered"] = -1
+    for pre_assembly in pre_assemblies:
+        df.loc[df[pre_assembly] >= 0, "clustered"] = 1
+    df.loc[df["non_assembly"] >= 0, "clustered"] = 1
+    return df[["pre_assembly", "post_assembly", "clustered"]]
+
+
 def load_synapse_clusters(project_name, seed, dir_tag, cross_assembly):
     """Loads synapse clusters for given `seed` saved by `assemblyfire`"""
     base_dir = os.path.join(SIMS_DIR, project_name, "analyses", "syn_clusters" + dir_tag, "seed%i" % seed)
-    syn_clusters, gids = {}, np.array([])
+    dfs, gids = [], []
     for f_name in os.listdir(base_dir):
         if cross_assembly:
             if f_name[:6] == "cross_" and f_name[-4:] == ".pkl":
                 df = pd.read_pickle(os.path.join(base_dir, f_name))
-                syn_clusters[int(f_name.split("assembly")[1].split(".pkl")[0])] = df
-                gids = np.concatenate((gids, df["post_gid"].unique()))
+                gids.append(df["post_gid"].unique())
+                dfs.append(_simplify_synapse_cluster_df(df, int(f_name.split("assembly")[1].split(".pkl")[0])))
         else:
             if f_name[:6] != "cross_" and f_name[-4:] == ".pkl":
                 df = pd.read_pickle(os.path.join(base_dir, f_name))
-                syn_clusters[int(f_name.split("assembly")[1].split(".pkl")[0])] = df
-                gids = np.concatenate((gids, df["post_gid"].unique()))
-    return syn_clusters, gids
+                gids.append(df["post_gid"].unique())
+                dfs.append(_simplify_synapse_cluster_df(df, int(f_name.split("assembly")[1].split(".pkl")[0])))
+    return pd.concat(dfs).sort_index(), np.unique(np.concatenate(gids))
 
 
 def load_synapse_report(h5f_name, t_start=None, t_end=None, t_step=None, gids=None, return_idx=False):
@@ -323,82 +339,21 @@ def get_synapse_changes(sim_path, report_name, gids):
                      index=data.index, name="delta_%s" % report_name)
 
 
-def _get_fracs(syn_clusters):
-    """Gets fraction of synapses coming from assemblies (and for non-assembly saved with key: -1)"""
-    fracs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        pre_asssembly_idx = [int(label.split("assembly")[1]) for label in syn_cluster.columns.to_list()
-                             if label.split("assembly")[0] == '']
-        assembly_fracs = {pre_assembly_id: {} for pre_assembly_id in pre_asssembly_idx + [-1]}  # -1 for non-assembly
-        for pre_assembly_id in pre_asssembly_idx:
-            assembly_syns = syn_cluster["assembly%i" % pre_assembly_id]
-            assembly_fracs[pre_assembly_id] = len(assembly_syns[assembly_syns >= -1]) / len(assembly_syns)
-        non_assembly_syns = syn_cluster["non_assembly"]
-        assembly_fracs[-1] = len(non_assembly_syns[non_assembly_syns >= -1]) / len(non_assembly_syns)
-        fracs[assembly_id] = assembly_fracs
-    return fracs
-
-
-def _get_change_probs(syn_clusters, diffs):
-    """Gets probabilities of potentiated, unchanged, and depressed synapses"""
-    probs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        assembly_diffs = diffs.loc[syn_cluster.index]
-        n_syns = len(assembly_diffs)
-        potentiated, depressed = len(assembly_diffs[assembly_diffs > 0]), len(assembly_diffs[assembly_diffs < 0])
-        assembly_probs = np.array([potentiated, 0., depressed]) / n_syns
-        assembly_probs[1] = 1 - np.sum(assembly_probs)
-        probs[assembly_id] = assembly_probs
-    return probs
-
-
-def _group_diffs(syn_clusters, diffs):
-    """
-    Groups efficacy differences (rho at last time step - rho at first time step) in sample neurons from assemblies
-    based on 2 criteria: 1) synapse is coming from assembly neuron vs. non-assembly neuron (fist key (-1 for non-assembly))
-                         2) synapse is part of a synapse cluster (clustering done in `assemblyfire`) vs. not (second key)
-    This seemed to be a good first implementation and `get_michelson_contrast()` below is based in this format...
-    but see `diffs2df()` below, which creates a DataFrame which is easier to understand
-    """
-    grouped_diffs = {}
-    for assembly_id, syn_cluster in syn_clusters.items():
-        pre_asssembly_idx = [int(label.split("assembly")[1]) for label in syn_cluster.columns.to_list()
-                             if label.split("assembly")[0] == '']
-        assembly_diffs = {pre_assembly_id: {} for pre_assembly_id in pre_asssembly_idx + [-1]}  # -1 for non-assembly
-        for pre_assembly_id in pre_asssembly_idx:
-            assembly_syns = syn_cluster["assembly%i" % pre_assembly_id]
-            assembly_diffs[pre_assembly_id][1] = diffs.loc[assembly_syns[assembly_syns >= 0].index]
-            assembly_diffs[pre_assembly_id][0] = diffs.loc[assembly_syns[assembly_syns == -1].index]
-        non_assembly_syns = syn_cluster["non_assembly"]
-        assembly_diffs[-1] = {1: diffs.loc[non_assembly_syns[non_assembly_syns >= 0].index],
-                              0: diffs.loc[non_assembly_syns[non_assembly_syns == -1].index]}
-        grouped_diffs[assembly_id] = assembly_diffs
-    return grouped_diffs
-
-
-def _diffs2df(grouped_diffs):
-    """Creates a DataFrame from `grouped_diffs` (easier to understand, plot and merge with extra morph. features)"""
-    dfs = []
-    for assembly_id, tmp in grouped_diffs.items():
-        for pre_assembly_id, diffs in tmp.items():
-            for clustered_int, clustered_bool in zip([0, 1], [False, True]):
-                df = diffs[clustered_int].to_frame()
-                df["assembly"] = assembly_id
-                df["pre_assembly"] = pre_assembly_id
-                df["clustered"] = clustered_bool
-                dfs.append(df)
-    return pd.concat(dfs).sort_index()
-
-
-def get_grouped_syn_diffs(project_name, seed, sim_path, report_name, dir_tag, cross_assembly=False):
-    """Wrapper of other functions that together load and pre-calculate/group stuff for statistical tests and plotting"""
-    syn_clusters, gids = load_synapse_clusters(project_name, seed, dir_tag, cross_assembly)
-    fracs = _get_fracs(syn_clusters)
+def get_assembly_clustered_syn_diffs(project_name, seed, sim_path, report_name, dir_tag, cross_assembly=False):
+    """Loads and simplifies data saved by `assemblyfire` and adds synapse changes (last - first time step)"""
+    df, gids = load_synapse_clusters(project_name, seed, dir_tag, cross_assembly)
     diffs = get_synapse_changes(sim_path, report_name, gids)
-    probs = _get_change_probs(syn_clusters, diffs)
-    grouped_diffs = _group_diffs(syn_clusters, diffs)
-    df = _diffs2df(grouped_diffs.copy())
-    return fracs, probs, grouped_diffs, df
+    df[diffs.name] = diffs.loc[df.index]
+    return df
+
+
+def sort_assembly_keys(key_list):
+    """Sort keys of assembly idx. If -1 is part of the list (standing for non-assembly) then that comes last"""
+    if -1 not in key_list:
+        return np.sort(key_list)
+    else:
+        keys = np.array(key_list)
+        return np.concatenate((np.sort(keys[keys >= 0]), np.array([-1])))
 
 
 def split_synapse_report(c, data, split_by):
