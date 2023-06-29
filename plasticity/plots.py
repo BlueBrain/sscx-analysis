@@ -1,6 +1,6 @@
 """
 Plastic SSCx analysis related plots
-author: András Ecker, last update: 05.2023
+author: András Ecker, last update: 06.2023
 """
 
 import numpy as np
@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, BoundaryNorm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import seaborn as sns
 from statannotations.Annotator import Annotator
@@ -580,16 +580,21 @@ def plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_val
     plt.close(fig)
 
 
-def plot_bglibpy_trace(t, v, t_nd, v_nd, fig_name):
-    """Plots soma voltage traces from original (Neurodamus) and BGLibPy sims"""
-    fig = plt.figure(figsize=(10, 6.5))
+def plot_synapses(morph, x, y, ncols, col_bins, fig_name, cmap="coolwarm", col_bounds=[-0.9, 0.9]):
+    """Plot synapses on morphology (colors are derived from `col_bins` and `cmap`)"""
+    from neurom import load_morphology, NeuriteType
+    from neurom.view import matplotlib_impl
+
+    cmap = plt.cm.get_cmap(cmap, ncols)
+    norm = BoundaryNorm(np.linspace(col_bounds[0], col_bounds[1], ncols + 1), cmap.N)
+    fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(1, 1, 1)
-    ax.plot(t, v, 'r-', label="BGLibPy")
-    ax.plot(t_nd, v_nd, 'k-', label="Neurodamus")
-    ax.legend(frameon=False)
-    ax.set_xlim([t[0], t[-1]])
-    ax.set_xlabel("Time (ms)")
-    ax.set_ylabel("V (mV)")
-    sns.despine(offset=2)
-    fig.savefig(fig_name, bbox_inches="tight", dpi=100)
+    matplotlib_impl.plot_morph(neurite_type=(NeuriteType.apical_dendrite, NeuriteType.basal_dendrite),
+                               ax=ax, morph=load_morphology(morph), color="black")
+    fig.colorbar(matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm), ax=ax, fraction=0.05, shrink=0.5)
+    ax.scatter(x, y, c=cmap(col_bins - 1), s=10)
+    ax.set_xlabel("x (um)")
+    ax.set_ylabel("y (um)")
+    sns.despine(ax=ax, trim=True)
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)

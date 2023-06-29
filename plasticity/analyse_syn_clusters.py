@@ -10,8 +10,10 @@ import pandas as pd
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from bluepy import Circuit
+from bluepy.enums import Synapse
 import utils
-from plots import plot_2x2_cond_probs, plot_nx2_cond_probs, plot_diffs_stats
+from plots import plot_2x2_cond_probs, plot_nx2_cond_probs, plot_diffs_stats, plot_synapses
 
 pd.set_option('mode.chained_assignment', None)
 FIGS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/figures/v7_assemblies"
@@ -111,6 +113,27 @@ def test_significance(df, nsamples=1000, sign_th=0.05):
         return None, None, None, None, None
 
 
+def plot_syn_clust_diffs(c, df, fig_dir, nsamples=10, ncols=9):
+    """Finds first `nsample` gids with most of their clustered assembly synapses changing and plots
+    all synapse changes (even if they didn't change but still are part of a cluster)"""
+    utils.ensure_dir(fig_dir)
+    # count how many clustered assembly synapses are changing per gid
+    gids = df.loc[(df["delta_rho"] != 0) & (df["clustered"] == 1)
+                  & (df["pre_assembly"] != -1)]["post_gid"].value_counts().index.to_numpy()
+    for gid in gids[:nsamples]:
+        df_tmp = df.loc[(df["post_gid"] == gid) & (df["clustered"] == 1) & (df["pre_assembly"] != -1)]
+        # colors (based on changes in rho)
+        col_bins = np.digitize(df_tmp["delta_rho"].to_numpy(), np.linspace(-0.9, 0.9, ncols + 1))
+        # x, y location of synapses
+        loc_df = c.connectome.synapse_properties(df_tmp.index.to_numpy(), [Synapse.POST_X_CENTER, Synapse.POST_Y_CENTER])
+        x, y = loc_df[Synapse.POST_X_CENTER].to_numpy(), loc_df[Synapse.POST_Y_CENTER].to_numpy()
+        # magic NeuroM plot
+        morph = c.morph.get(gid, transform=True)
+        fig_name = os.path.join(fig_dir, "assembly%i_a%i_syn_clust_rho_diffs.png" %
+                                (df_tmp["post_assembly"].unique()[0], gid))
+        plot_synapses(morph, x, y, ncols, col_bins, fig_name)
+
+
 def main(project_name, dir_tag):
     report_name = "rho"
     sim_paths = utils.load_sim_paths(project_name)
@@ -131,9 +154,11 @@ def main(project_name, dir_tag):
         fig_name = os.path.join(figs_dir, "assembly_diff_stats_seed%i.png" % seed)
         if pot_df is not None and dep_df is not None:
             plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
+        # plot changes in assembly clusters
+        c = Circuit(sim_path)
+        plot_syn_clust_diffs(c, df, os.path.join(figs_dir, "seed%i_debug" % seed))
 
         # same as above, but for cross assemblies
-        # probability of any change (given the assembly/non-assembly and clustered/non-clustered conditions)
         df = utils.get_assembly_clustered_syn_diffs(project_name, seed, sim_path, report_name,
                                                     dir_tag, cross_assembly=True)
         probs, pot_contrasts, dep_contrasts = get_michelson_contrast(df)
@@ -141,12 +166,12 @@ def main(project_name, dir_tag):
             fracs = df.loc[df["post_assembly"] == assembly, "pre_assembly"].value_counts(normalize=True).to_dict()
             fig_name = os.path.join(figs_dir, "cross_assembly%i_cond_probs_seed%i.png" % (assembly, seed))
             plot_nx2_cond_probs(probs[assembly], fracs, pot_contrast, dep_contrasts[assembly], assembly, fig_name)
-        # checking if the amount of any change is significant
         pot_df, _, _, pot_pairs, pot_p_vals = test_significance(df.loc[df["delta_rho"] > 0])
         dep_df, _, _, dep_pairs, dep_p_vals = test_significance(df.loc[df["delta_rho"] < 0])
         fig_name = os.path.join(figs_dir, "cross_assembly_diff_stats_seed%i.png" % seed)
         if pot_df is not None and dep_df is not None:
             plot_diffs_stats(pot_df, dep_df, pot_pairs, dep_pairs, pot_p_vals, dep_p_vals, fig_name)
+        plot_syn_clust_diffs(c, df, os.path.join(figs_dir, "seed%i_debug" % seed))
 
 
 if __name__ == "__main__":

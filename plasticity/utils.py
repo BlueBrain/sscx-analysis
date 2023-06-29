@@ -15,7 +15,7 @@ import multiprocessing as mp
 from libsonata import ElementReportReader
 
 
-SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations"
+SIMS_DIR = "/gpfs/bbp.cscs.ch/project/proj96/home/ecker/simulations"
 MAPPING_SYNF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/syn_idx.pkl"
 NONREP_SYNF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/nonrep_syn_df.pkl"
 MORPH_FF_NAME = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/morph_features.pkl"
@@ -202,7 +202,7 @@ def _simplify_synapse_cluster_df(df, post_assembly_id):
     for pre_assembly in pre_assemblies:
         df.loc[df[pre_assembly] >= 0, "clustered"] = 1
     df.loc[df["non_assembly"] >= 0, "clustered"] = 1
-    return df[["pre_assembly", "post_assembly", "clustered"]]
+    return df[["pre_assembly", "post_assembly", "post_gid", "clustered"]]
 
 
 def load_synapse_clusters(project_name, seed, dir_tag, cross_assembly):
