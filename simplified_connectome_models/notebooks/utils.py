@@ -483,7 +483,7 @@ def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, save_path=None):
     plt.show()
 
 
-def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, save_path=None):
+def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
     plt.figure(figsize=figsize)
     for ci, cn in enumerate(plot_names):
@@ -498,7 +498,7 @@ def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=Tr
     fig_title = f'{syn_type.upper()} PSTHs'
     plt.title(fig_title, fontweight='bold')
     if show_legend:
-        plt.legend(loc='upper right')
+        plt.legend(**lgd_props)
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
@@ -507,7 +507,7 @@ def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=Tr
     plt.show()
 
 
-def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={}, save_path=None):
+def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
     if isinstance(show_legend, list):
         assert len(show_legend) == len(plot_names), "ERROR: Show legend error!"
     else:
@@ -519,7 +519,7 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
             if np.all(np.isnan(psths_per_layer[ci][lidx])):
                 _lbl = None
             else:
-                _lbl = f'L{lidx + 1}-{syn_type.upper()}'
+                _lbl = f'L{lidx + 1}'
             # plt.step(bins, np.hstack((psths_per_layer[ci][lidx][0], psths_per_layer[ci][lidx])), where='pre', alpha=0.9, label=_lbl)
             plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths_per_layer[ci][lidx], '-', label=_lbl, alpha=0.9)
         plt.xlabel('Time (ms)')
@@ -527,7 +527,7 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
         fig_title = f'{syn_type.upper()} PSTHs ({cn})'
         plt.title(fig_title, fontweight='bold')
         if show_legend[ci]:
-            plt.legend(loc='upper right', **lgd_props)
+            plt.legend(**lgd_props)
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
         plt.tight_layout()
