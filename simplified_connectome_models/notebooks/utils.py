@@ -70,10 +70,10 @@ def extract_spikes(circuit_names, sim_configs, save_name, node_set='hex0', save_
             spk_inh_per_layer.append(spk_inh_lay)
 
         # Save to disc
-        data_dict = dict(spk_exc=np.array(spk_exc, dtype=object),
-                         spk_inh=np.array(spk_inh, dtype=object),
-                         spk_exc_per_layer=np.array(spk_exc_per_layer, dtype=object),
-                         spk_inh_per_layer=np.array(spk_inh_per_layer, dtype=object))
+        data_dict = dict(spk_exc=np.array(spk_exc + [pd.DataFrame([])], dtype=object)[:-1],  # [Weird conversion to np.array (incl. dummy) required for storing as .npz file and keeping data frames]
+                         spk_inh=np.array(spk_inh + [pd.DataFrame([])], dtype=object)[:-1],  # [Weird conversion to np.array (incl. dummy) required for storing as .npz file and keeping data frames]
+                         spk_exc_per_layer=np.array(spk_exc_per_layer + [pd.DataFrame([])], dtype=object)[:-1],  # [Weird conversion to np.array (incl. dummy) required for storing as .npz file and keeping data frames]
+                         spk_inh_per_layer=np.array(spk_inh_per_layer + [pd.DataFrame([])], dtype=object)[:-1])  # [Weird conversion to np.array (incl. dummy) required for storing as .npz file and keeping data frames]
         np.savez(fn, **data_dict)
         print(f'INFO: Spike data saved to "{fn}"')
     return data_dict
