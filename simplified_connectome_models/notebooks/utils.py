@@ -351,6 +351,18 @@ def extract_psths_per_layer(spk_exc_per_layer, spk_inh_per_layer, t_stim, t_psth
     return psths_exc_per_layer, psths_inh_per_layer, bins
 
 
+def extract_psths_per_pattern(spk_exc, spk_inh, t_stim, stim_train, t_psth, bin_size):
+    """ PSTHs of firing cells per pattern. """
+    num_patterns = np.max(stim_train) + 1
+    pattern_psths_exc = []
+    pattern_psths_inh = []
+    for p in range(num_patterns):
+        psths_exc, psths_inh, bins = extract_psths(spk_exc, spk_inh, t_stim[stim_train == p], t_psth, bin_size)
+        pattern_psths_exc.append(psths_exc)
+        pattern_psths_inh.append(psths_inh)
+    return pattern_psths_exc, pattern_psths_inh, bins
+
+
 def _plot_spikes(st, nid_offset, t_start, alpha=1.0, color=None):
     if len(st) == 0:
         return np.nan, 0
@@ -534,3 +546,30 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
         if save_path is not None:
             plt.savefig(os.path.join(save_path, f'psths_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=300)
         plt.show()
+
+
+def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsize=(12, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
+    num_patterns = len(psths)
+    circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
+    plt.figure(figsize=figsize)
+    for p in range(num_patterns):
+        plt.subplot(1, num_patterns, p + 1)
+        for ci, cn in enumerate(plot_names):
+            if np.all(np.isnan(psths[p][ci])):
+                _lbl = None
+            else:
+                _lbl = cn
+            plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths[p][ci], '-', label=_lbl, color=circ_colors[ci, :], alpha=0.9, zorder=len(plot_names) - ci)
+        plt.xlabel('Time (ms)')
+        plt.ylabel('Firing rate (Hz)')
+        plt.title(f'Pattern {p} (N={np.sum(np.array(stim_train) == p)})')
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+    fig_title = f'{syn_type.upper()} PSTHs'
+    plt.suptitle(fig_title, fontweight='bold')
+    if show_legend:
+        plt.legend(**lgd_props)
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, f'pattern_psths__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=300)
+    plt.show()
