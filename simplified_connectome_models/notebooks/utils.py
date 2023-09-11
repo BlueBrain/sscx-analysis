@@ -15,6 +15,10 @@ from scipy.stats import wilcoxon
 COLOR_EXC = 'tab:red'
 COLOR_INH = 'tab:blue'
 
+RATE_COLOR_DICT = {'EXC': 'darkred',
+                   'INH': 'royalblue',
+                   'INP': 'black'}
+
 
 def _get_population_spikes(sim):
     """Returns spikes of non-virtual nodes population."""
@@ -301,35 +305,34 @@ def compute_cell_rate_significance(circuit_names, sim_configs, cell_rates, node_
     return data_dict
 
 
-def extract_psths(spk_exc, spk_inh, t_stim, t_psth, bin_size):
+def extract_overall_psths(spk_all, t_stim, t_psth, bin_size):
     """ PSTHs of firing (!) cells. """
     t_max = np.max(np.diff(t_psth))
     num_bins = np.round(t_max / bin_size).astype(int)
     bins = np.arange(num_bins + 1) * bin_size
 
-    psths_exc = []
-    psths_inh = []
-    for ci in range(len(spk_exc)):
+    psths = []
+    for ci in range(len(spk_all)):
         # Extract stimulus spikes
-        stim_spikes_exc = []
-        stim_spikes_inh = []
+        stim_spikes = []
         for t in t_stim:
-            spk = spk_exc[ci][np.logical_and(spk_exc[ci].index >= t, spk_exc[ci].index < t + t_psth[1])]
+            spk = spk_all[ci][np.logical_and(spk_all[ci].index >= t, spk_all[ci].index < t + t_psth[1])]
             spk.index = spk.index - t # Re-align to stimulus onset
-            stim_spikes_exc.append(spk)
-            spk = spk_inh[ci][np.logical_and(spk_inh[ci].index >= t, spk_inh[ci].index < t + t_psth[1])]
-            spk.index = spk.index - t # Re-align to stimulus onset
-            stim_spikes_inh.append(spk)
-        stim_spikes_exc = pd.concat(stim_spikes_exc)
-        stim_spikes_inh = pd.concat(stim_spikes_inh)
+            stim_spikes.append(spk)
+        stim_spikes = pd.concat(stim_spikes)
 
         # Compute PSTHs
-        n_exc = len(np.unique(stim_spikes_exc.values)) # Number of neurons or fibers
-        n_inh = len(np.unique(stim_spikes_inh.values)) # Number of neurons or fibers
-        psth_exc = 1e3 * np.histogram(stim_spikes_exc.index, bins=bins)[0] / (bin_size * n_exc * len(t_stim))
-        psth_inh = 1e3 * np.histogram(stim_spikes_inh.index, bins=bins)[0] / (bin_size * n_inh * len(t_stim))
-        psths_exc.append(psth_exc)
-        psths_inh.append(psth_inh)
+        n_all = len(np.unique(stim_spikes.values)) # Number of neurons or fibers
+        psth = 1e3 * np.histogram(stim_spikes.index, bins=bins)[0] / (bin_size * n_all * len(t_stim))
+        psths.append(psth)
+
+    return psths, bins
+
+
+def extract_psths(spk_exc, spk_inh, t_stim, t_psth, bin_size):
+    """ PSTHs of firing (!) EXC/INH cells. """
+    psths_exc, bins = extract_overall_psths(spk_exc, t_stim, t_psth, bin_size)
+    psths_inh, _ = extract_overall_psths(spk_inh, t_stim, t_psth, bin_size)
 
     return psths_exc, psths_inh, bins
 
@@ -375,7 +378,7 @@ def _plot_spikes(st, nid_offset, t_start, alpha=1.0, color=None):
     return y_pos, len(unique_nids)
 
 
-def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_start, t_end, t_zero, figsize=(10, 3), save_path=None, alpha = 0.5, t_stim=None, stim_train=None):
+def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_start, t_end, t_zero, figsize=(10, 3), save_path=None, alpha = 0.5, t_stim=None, stim_train=None, psth_dict={}):
     if t_stim is None or len(t_stim) == 0:
         sim_type = 'Spontaneous'
     else:
@@ -426,16 +429,32 @@ def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_st
             else:
                 for p in range(num_patterns):
                     plt.vlines(t_stim[stim_train == p] - t_zero, *plt.ylim(), color=pat_colors[p, :], alpha=0.75, label=f'P{p}')
-            plt.legend(loc='lower right', bbox_to_anchor=[1.0, 1.0], fontsize=8, ncol=1 if stim_train is None else num_patterns)
-
+            plt.legend(loc='lower left', bbox_to_anchor=[0.0, 1.0], fontsize=6, ncol=1 if stim_train is None else num_patterns)
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
+
+        # Plot PSTHs, if provided
+        if len(psth_dict) > 0:
+            plt.twinx()
+            plt.ylabel('Rate (Hz)')
+            bin_size = 20  # (ms)
+            for _name, _spk in psth_dict.items():
+                psth, bins = extract_overall_psths([_spk[ci]], [0], [0, t_end - t_start], bin_size)
+                bin_centers = bins[:-1] + 0.5 * np.mean(np.diff(bins)) + t_start
+                if _name in RATE_COLOR_DICT:
+                    col = RATE_COLOR_DICT[_name]
+                else:
+                    col = None
+                plt.plot(bin_centers, psth[0], color=col, alpha=0.75, lw=1, label=_name, zorder=0)
+            plt.gca().spines['top'].set_visible(False)
+            plt.legend(loc='lower right', bbox_to_anchor=[1.0, 1.0], fontsize=6, ncol=len(psth_dict))
+
         plt.tight_layout()
         if save_path is not None:
             plt.savefig(os.path.join(save_path, f'plot_spikes_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}__{t_end:.0f}ms.png'), dpi=300)
 
 
-def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=False, figsize=(10, 3), show_legend=True, save_path=None):
+def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=False, figsize=(10, 3), show_legend=True, lgd_props={'loc': 'lower left'}, save_path=None):
     num_layers = len(inp_per_layer[0])
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
 
@@ -465,7 +484,7 @@ def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=F
         plt.yscale('log')
     plt.title(title, fontweight='bold')
     if show_legend:
-        plt.legend(loc='lower left')
+        plt.legend(**lgd_props)
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
