@@ -309,14 +309,14 @@ def extract_overall_psths(spk_all, t_stim, t_psth, bin_size):
     """ PSTHs of firing (!) cells. """
     t_max = np.max(np.diff(t_psth))
     num_bins = np.round(t_max / bin_size).astype(int)
-    bins = np.arange(num_bins + 1) * bin_size
+    bins = np.arange(num_bins + 1) * bin_size + t_psth[0]
 
     psths = []
     for ci in range(len(spk_all)):
         # Extract stimulus spikes
         stim_spikes = []
         for t in t_stim:
-            spk = spk_all[ci][np.logical_and(spk_all[ci].index >= t, spk_all[ci].index < t + t_psth[1])]
+            spk = spk_all[ci][np.logical_and(spk_all[ci].index >= t + t_psth[0], spk_all[ci].index < t + t_psth[1])]
             spk.index = spk.index - t # Re-align to stimulus onset
             stim_spikes.append(spk)
         stim_spikes = pd.concat(stim_spikes)
