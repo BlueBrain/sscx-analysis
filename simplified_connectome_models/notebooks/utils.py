@@ -17,7 +17,8 @@ COLOR_INH = 'tab:blue'
 
 RATE_COLOR_DICT = {'EXC': 'darkred',
                    'INH': 'royalblue',
-                   'INP': 'black'}
+                   'INP': 'black',
+                   'Input': 'black'}
 
 
 def _get_population_spikes(sim):
@@ -372,13 +373,13 @@ def _plot_spikes(st, nid_offset, t_start, alpha=1.0, color=None):
     unique_nids = np.unique(st.values)
     nid_mapping = np.full(np.max(st.values) + 1, -1) # Map node IDs to continuous range for plotting
     nid_mapping[unique_nids] = np.arange(len(unique_nids))
-    plt.plot(st.index - t_start, nid_mapping[st.values] + nid_offset, '.', markersize=2, markeredgewidth=0, color=color, alpha=alpha)
+    plt.plot(st.index - t_start, nid_mapping[st.values] + nid_offset, '.', markersize=1, markeredgewidth=0, color=color, alpha=alpha)
     y_pos = np.mean(nid_mapping[st.values] + nid_offset)
 
     return y_pos, len(unique_nids)
 
 
-def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_start, t_end, t_zero, figsize=(10, 3), save_path=None, alpha = 0.5, t_stim=None, stim_train=None, psth_dict={}):
+def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_start, t_end, t_zero, figsize=(10, 3), save_path=None, alpha=0.5, t_stim=None, stim_train=None, psth_dict={}, no_title=False, dpi=300):
     if t_stim is None or len(t_stim) == 0:
         sim_type = 'Spontaneous'
     else:
@@ -414,12 +415,13 @@ def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_st
                 y_cols.append(COLOR_INH)
             nid_offset += n
 
-        plt.yticks(y_ticks, y_lbls, fontsize=8)
+        plt.yticks(y_ticks, y_lbls, fontsize=4)
         for i, lbl in enumerate(plt.gca().get_yticklabels()):
              lbl.set_color(y_cols[i])
         plt.gca().invert_yaxis()
         fig_title = f'{sim_type} activity ({plot_names[ci]})'
-        plt.title(fig_title, fontweight='bold')
+        if not no_title:
+            plt.title(fig_title, fontweight='bold')
         plt.xlim([t_start, t_end])
         plt.xlabel('Time (ms)')
         if t_stim is not None and len(t_stim) > 0:
@@ -429,7 +431,7 @@ def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_st
             else:
                 for p in range(num_patterns):
                     plt.vlines(t_stim[stim_train == p] - t_zero, *plt.ylim(), color=pat_colors[p, :], alpha=0.75, label=f'P{p}')
-            plt.legend(loc='lower left', bbox_to_anchor=[0.0, 1.0], fontsize=6, ncol=1 if stim_train is None else num_patterns)
+            plt.legend(loc='lower left', bbox_to_anchor=[0.0, 1.0], fontsize=6, ncol=1 if stim_train is None else num_patterns, frameon=False)
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
 
@@ -439,22 +441,22 @@ def plot_spikes_per_layer(plot_names, spk_exc_per_layer, spk_inh_per_layer, t_st
             plt.ylabel('Rate (Hz)')
             bin_size = 20  # (ms)
             for _name, _spk in psth_dict.items():
-                psth, bins = extract_overall_psths([_spk[ci]], [0], [0, t_end - t_start], bin_size)
-                bin_centers = bins[:-1] + 0.5 * np.mean(np.diff(bins)) + t_start
+                psth, bins = extract_overall_psths([_spk[ci]], [0], [0, t_end + t_zero], bin_size)
+                bin_centers = bins[:-1] + 0.5 * np.mean(np.diff(bins)) - t_zero
                 if _name in RATE_COLOR_DICT:
                     col = RATE_COLOR_DICT[_name]
                 else:
                     col = None
                 plt.plot(bin_centers, psth[0], color=col, alpha=0.75, lw=1, label=_name, zorder=0)
             plt.gca().spines['top'].set_visible(False)
-            plt.legend(loc='lower right', bbox_to_anchor=[1.0, 1.0], fontsize=6, ncol=len(psth_dict))
+            plt.legend(loc='lower right', bbox_to_anchor=[1.0, 1.0], fontsize=6, ncol=len(psth_dict), frameon=False)
 
         plt.tight_layout()
         if save_path is not None:
-            plt.savefig(os.path.join(save_path, f'plot_spikes_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}__{t_end:.0f}ms.png'), dpi=300)
+            plt.savefig(os.path.join(save_path, f'plot_spikes_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}__{t_end:.0f}ms.png'), dpi=dpi)
 
 
-def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=False, figsize=(10, 3), show_legend=True, lgd_props={'loc': 'lower left'}, save_path=None):
+def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=False, figsize=(10, 3), show_legend=True, lgd_props={'loc': 'lower left'}, save_path=None, dpi=300):
     num_layers = len(inp_per_layer[0])
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
 
@@ -489,11 +491,11 @@ def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=F
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
     if save_path is not None:
-        plt.savefig(os.path.join(save_path, f'plot_per_layer__{title.replace(" ", "_")}__{ylabel.split(" (")[0]}.png'), dpi=300)
+        plt.savefig(os.path.join(save_path, f'plot_per_layer__{title.replace(" ", "_")}__{ylabel.split(" (")[0]}.png'), dpi=dpi)
     plt.show()
 
 
-def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, save_path=None):
+def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, save_path=None, dpi=300):
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
     bins = np.arange(0, np.ceil(np.max(cell_rates)) + 1, 0.5)
     plt.figure(figsize=(4, 4))
@@ -510,11 +512,11 @@ def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, save_path=None):
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
     if save_path is not None:
-        plt.savefig(os.path.join(save_path, f'single_cell_rate_distributions__{sim_type}.png'), dpi=300)
+        plt.savefig(os.path.join(save_path, f'single_cell_rate_distributions__{sim_type}.png'), dpi=dpi)
     plt.show()
 
 
-def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
+def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None, dpi=300):
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
     plt.figure(figsize=figsize)
     for ci, cn in enumerate(plot_names):
@@ -534,11 +536,11 @@ def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=Tr
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
     if save_path is not None:
-        plt.savefig(os.path.join(save_path, f'psths__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=300)
+        plt.savefig(os.path.join(save_path, f'psths__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=dpi)
     plt.show()
 
 
-def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
+def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None, dpi=300):
     if isinstance(show_legend, list):
         assert len(show_legend) == len(plot_names), "ERROR: Show legend error!"
     else:
@@ -563,11 +565,11 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
         plt.gca().spines['right'].set_visible(False)
         plt.tight_layout()
         if save_path is not None:
-            plt.savefig(os.path.join(save_path, f'psths_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=300)
+            plt.savefig(os.path.join(save_path, f'psths_per_layer__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=dpi)
         plt.show()
 
 
-def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsize=(12, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None):
+def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsize=(12, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None, dpi=300):
     num_patterns = len(psths)
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
     plt.figure(figsize=figsize)
@@ -590,5 +592,5 @@ def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsiz
         plt.legend(**lgd_props)
     plt.tight_layout()
     if save_path is not None:
-        plt.savefig(os.path.join(save_path, f'pattern_psths__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=300)
+        plt.savefig(os.path.join(save_path, f'pattern_psths__{fig_title.replace(" ", "_").replace("(", "").replace(")", "")}'), dpi=dpi)
     plt.show()
