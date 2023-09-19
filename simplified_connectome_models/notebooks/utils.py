@@ -495,19 +495,21 @@ def plot_per_layer(inp_per_layer, plot_names, ylabel, title, pvals=None, log_y=F
     plt.show()
 
 
-def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, save_path=None, dpi=300):
+def plot_cell_rate_histograms(cell_rates, plot_names, sim_type, figsize=(4, 4), bins=None, show_legend=True, save_path=None, dpi=300):
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
-    bins = np.arange(0, np.ceil(np.max(cell_rates)) + 1, 0.5)
-    plt.figure(figsize=(4, 4))
+    if bins is None:
+        bins = np.arange(0, np.ceil(np.max(cell_rates)) + 1, 0.5)
+    plt.figure(figsize=figsize)
     for ci, cn in enumerate(plot_names):
-        cnt, _ = np.histogram(cell_rates[ci], bins=bins)
+        cnt, bins = np.histogram(cell_rates[ci], bins=bins)
     #     plt.step(bins, np.hstack((cnt[0], cnt)), where='pre', label=cn, color=circ_colors[ci, :], alpha=0.9, zorder=len(plot_names) - ci)
         plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], cnt, '-', label=cn, color=circ_colors[ci, :], alpha=0.9, zorder=len(plot_names) - ci)
     plt.yscale('log')
     plt.xlabel('Firing rate (Hz)')
     plt.ylabel('Cell count')
-    plt.title(f'{sim_type} rate distributions', fontweight='bold')
-    plt.legend(loc='upper right')
+    plt.title(f'{sim_type} rates', fontweight='bold')
+    if show_legend:
+        plt.legend(loc='upper right', frameon=False)
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.tight_layout()
@@ -528,7 +530,7 @@ def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=Tr
         plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths[ci], '-', label=_lbl, color=circ_colors[ci, :], alpha=0.9, zorder=len(plot_names) - ci)
     plt.xlabel('Time (ms)')
     plt.ylabel('Firing rate (Hz)')
-    fig_title = f'{syn_type.upper()} PSTHs'
+    fig_title = f'{syn_type} PSTHs'
     plt.title(fig_title, fontweight='bold')
     if show_legend:
         plt.legend(**lgd_props)
@@ -557,7 +559,7 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
             plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths_per_layer[ci][lidx], '-', label=_lbl, alpha=0.9)
         plt.xlabel('Time (ms)')
         plt.ylabel('Firing rate (Hz)')
-        fig_title = f'{syn_type.upper()} PSTHs ({cn})'
+        fig_title = f'{syn_type} PSTHs ({cn})'
         plt.title(fig_title, fontweight='bold')
         if show_legend[ci]:
             plt.legend(**lgd_props)
@@ -586,7 +588,7 @@ def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsiz
         plt.title(f'Pattern {p} (N={np.sum(np.array(stim_train) == p)})')
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
-    fig_title = f'{syn_type.upper()} PSTHs'
+    fig_title = f'{syn_type} PSTHs'
     plt.suptitle(fig_title, fontweight='bold')
     if show_legend:
         plt.legend(**lgd_props)
