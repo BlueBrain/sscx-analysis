@@ -542,7 +542,7 @@ def plot_psths(psths, bins, plot_names, syn_type, figsize=(4, 4), show_legend=Tr
     plt.show()
 
 
-def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None, dpi=300):
+def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4, 4), show_legend=True, lgd_props={'loc': 'upper right'}, ymax=None, save_path=None, dpi=300):
     if isinstance(show_legend, list):
         assert len(show_legend) == len(plot_names), "ERROR: Show legend error!"
     else:
@@ -557,6 +557,8 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
                 _lbl = f'L{lidx + 1}'
             # plt.step(bins, np.hstack((psths_per_layer[ci][lidx][0], psths_per_layer[ci][lidx])), where='pre', alpha=0.9, label=_lbl)
             plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths_per_layer[ci][lidx], '-', label=_lbl, alpha=0.9)
+        if ymax is not None:
+            plt.ylim([0.0, ymax])
         plt.xlabel('Time (ms)')
         plt.ylabel('Firing rate (Hz)')
         fig_title = f'{syn_type} PSTHs ({cn})'
@@ -571,7 +573,7 @@ def plot_psths_per_layer(psths_per_layer, bins, plot_names, syn_type, figsize=(4
         plt.show()
 
 
-def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsize=(12, 4), show_legend=True, lgd_props={'loc': 'upper right'}, save_path=None, dpi=300):
+def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsize=(12, 4), show_legend=True, lgd_props={'loc': 'upper right'}, ymax=None, save_path=None, dpi=300):
     num_patterns = len(psths)
     circ_colors = plt.cm.jet(np.linspace(0, 1, len(plot_names)))
     plt.figure(figsize=figsize)
@@ -583,6 +585,8 @@ def plot_psths_per_pattern(psths, bins, plot_names, syn_type, stim_train, figsiz
             else:
                 _lbl = cn
             plt.plot([np.mean(bins[i : i + 2]) for i in range(len(bins) - 1)], psths[p][ci], '-', label=_lbl, color=circ_colors[ci, :], alpha=0.9, zorder=len(plot_names) - ci)
+        if ymax is not None:
+            plt.ylim([0.0, ymax])
         plt.xlabel('Time (ms)')
         plt.ylabel('Firing rate (Hz)')
         plt.title(f'Pattern {p} (N={np.sum(np.array(stim_train) == p)})')
