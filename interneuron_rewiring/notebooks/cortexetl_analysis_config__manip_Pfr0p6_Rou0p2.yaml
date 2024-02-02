@@ -50,24 +50,35 @@ analysis:
             bin_size: 1.0
             smoothing:
               1sd: {smoothing_type: Gaussian, kernel_sd: 1.0}
+              3sd: {smoothing_type: Gaussian, kernel_sd: 3.0}
+              5sd: {smoothing_type: Gaussian, kernel_sd: 5.0}
+              10sd: {smoothing_type: Gaussian, kernel_sd: 10.0}
+          3ms:
+            bin_size: 3.0
+            smoothing:
+              1sd: {smoothing_type: Gaussian, kernel_sd: 1.0}
+              3sd: {smoothing_type: Gaussian, kernel_sd: 3.0}
               5sd: {smoothing_type: Gaussian, kernel_sd: 5.0}
               10sd: {smoothing_type: Gaussian, kernel_sd: 10.0}
           5ms:
             bin_size: 5.0
             smoothing:
               1sd: {smoothing_type: Gaussian, kernel_sd: 1.0}
+              3sd: {smoothing_type: Gaussian, kernel_sd: 3.0}
               5sd: {smoothing_type: Gaussian, kernel_sd: 5.0}
               10sd: {smoothing_type: Gaussian, kernel_sd: 10.0}
           10ms:
             bin_size: 10.0
             smoothing:
               1sd: {smoothing_type: Gaussian, kernel_sd: 1.0}
+              3sd: {smoothing_type: Gaussian, kernel_sd: 3.0}
               5sd: {smoothing_type: Gaussian, kernel_sd: 5.0}
               10sd: {smoothing_type: Gaussian, kernel_sd: 10.0}
           100ms:
             bin_size: 100.0
             smoothing:
               1sd: {smoothing_type: Gaussian, kernel_sd: 1.0}
+              3sd: {smoothing_type: Gaussian, kernel_sd: 3.0}
               5sd: {smoothing_type: Gaussian, kernel_sd: 5.0}
               10sd: {smoothing_type: Gaussian, kernel_sd: 10.0}
     custom:
