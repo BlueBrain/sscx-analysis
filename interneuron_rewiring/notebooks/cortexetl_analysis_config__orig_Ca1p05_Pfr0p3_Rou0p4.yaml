@@ -1,7 +1,7 @@
 # CortexETL analysis config for current injection experiment (original circuit w/o manipulation)
 version: 3
-simulation_campaign: /gpfs/bbp.cscs.ch/data/scratch/proj83/home/pokorny/InterneuronRewiring/simulations/SSCx-HexO1-Release-TC__Hex0-CurrentInjection__Pfr0p3_Rou0p4/config.json
-output: /gpfs/bbp.cscs.ch/project/proj83/home/pokorny/InterneuronRewiring/analysis/cortexetl/orig/Pfr0p3_Rou0p4
+simulation_campaign: /gpfs/bbp.cscs.ch/data/scratch/proj83/home/pokorny/InterneuronRewiring/simulations/SSCx-HexO1-Release-TC__Hex0-CurrentInjection__Ca1p05_Pfr0p3_Rou0p4/config.json
+output: /gpfs/bbp.cscs.ch/project/proj83/home/pokorny/InterneuronRewiring/analysis/cortexetl/orig/Ca1p05_Pfr0p3_Rou0p4
 analysis:
   spikes:
     extraction:
