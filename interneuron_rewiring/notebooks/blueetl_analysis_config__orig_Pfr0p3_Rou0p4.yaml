@@ -1,0 +1,46 @@
+# BlueETL analysis config for current injection experiment (original circuit w/o manipulation)
+version: 3
+simulation_campaign: /gpfs/bbp.cscs.ch/data/scratch/proj83/home/pokorny/InterneuronRewiring/simulations/SSCx-HexO1-Release-TC__Hex0-CurrentInjection__Pfr0p3_Rou0p4/config.json
+output: /gpfs/bbp.cscs.ch/project/proj83/home/pokorny/InterneuronRewiring/analysis/blueetl/orig/Pfr0p3_Rou0p4
+analysis:
+  spikes:
+    extraction:
+      report:
+        type: spikes
+      neuron_classes:
+        L23_EXC: {query: {layer: [2, 3], synapse_class: [EXC]}}
+        L4_EXC: {query: {layer: [4], synapse_class: [EXC]}}
+        L5_EXC: {query: {layer: [5], synapse_class: [EXC]}}
+        L6_EXC: {query: {layer: [6], synapse_class: [EXC]}}
+        L1_INH: {query: {layer: [1], synapse_class: [INH]}}
+        L23_INH: {query: {layer: [2, 3], synapse_class: [INH]}}
+        L4_INH: {query: {layer: [4], synapse_class: [INH]}}
+        L5_INH: {query: {layer: [5], synapse_class: [INH]}}
+        L6_INH: {query: {layer: [6], synapse_class: [INH]}}
+        ALL_EXC: {query: {synapse_class: [EXC]}}
+        ALL_INH: {query: {synapse_class: [INH]}}
+        Stim_INH: {query: {mtype: [L23_BTC, L23_SBC, L4_BTC, L4_SBC, L5_BTC, L5_SBC, L6_BTC, L6_SBC]}}
+        Stim_L23_INH: {query: {mtype: [L23_BTC, L23_SBC]}}
+        Stim_L4_INH: {query: {mtype: [L4_BTC, L4_SBC]}}
+        Stim_L5_INH: {query: {mtype: [L5_BTC, L5_SBC]}}
+        Stim_L6_INH: {query: {mtype: [L6_BTC, L6_SBC]}}
+        NoStim_INH: {query: {mtype: [L1_DAC, L1_HAC, L1_LAC, L1_NGC-DA, L1_NGC-SA, L1_SAC, L23_BP, L23_CHC, L23_DBC, L23_LBC, L23_MC, L23_NBC, L23_NGC, L4_BP, L4_CHC, L4_DBC, L4_LBC, L4_MC, L4_NBC, L4_NGC, L5_BP, L5_CHC, L5_DBC, L5_LBC, L5_MC, L5_NBC, L5_NGC, L6_BP, L6_CHC, L6_DBC, L6_LBC, L6_MC, L6_NBC, L6_NGC]}}
+        NoStim_L1_INH: {query: {mtype: [L1_DAC, L1_HAC, L1_LAC, L1_NGC-DA, L1_NGC-SA, L1_SAC]}}
+        NoStim_L23_INH: {query: {mtype: [L23_BP, L23_CHC, L23_DBC, L23_LBC, L23_MC, L23_NBC, L23_NGC]}}
+        NoStim_L4_INH: {query: {mtype: [L4_BP, L4_CHC, L4_DBC, L4_LBC, L4_MC, L4_NBC, L4_NGC]}}
+        NoStim_L5_INH: {query: {mtype: [L5_BP, L5_CHC, L5_DBC, L5_LBC, L5_MC, L5_NBC, L5_NGC]}}
+        NoStim_L6_INH: {query: {mtype: [L6_BP, L6_CHC, L6_DBC, L6_LBC, L6_MC, L6_NBC, L6_NGC]}}
+      limit: null
+      population: S1nonbarrel_neurons
+      node_set: hex0
+      windows:
+        w1_spont: {bounds: [2000, 5000], window_type: spontaneous}
+        w2_inj: {bounds: [5000, 6000], window_type: injection}
+        w3_rec: {bounds: [6000, 7000], window_type: recovery}
+        w4_spont: {bounds: [7000, 10000], window_type: spontaneous}
+        w_all: {bounds: [2000, 10000], window_type: all}
+    features:
+    - type: multi
+      groupby: [simulation_id, circuit_id, neuron_class, window]
+      function: blueetl.external.bnac.calculate_features.calculate_features_multi
+      params: {export_all_neurons: true}
