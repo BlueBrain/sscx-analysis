@@ -36,12 +36,16 @@ def load_sim_paths(project_name):
         return pd.read_pickle(pklf_name)
     else:
         bc_path = os.path.join(SIMS_DIR, project_name, "BlueConfig")
+        sim_cfg_path = os.path.join(SIMS_DIR, project_name, "simulation_config.json")
         if os.path.isfile(bc_path):
             warnings.warn("No bbp-workflow generated pandas MI DF found. Creating one with a single entry.")
             return pd.Series(data=bc_path, index=[0], name="sim")
+        elif os.path.isfile(sim_cfg_path):
+            warnings.warn("No bbp-workflow generated pandas MI DF found. Creating one with a single entry.")
+            return pd.Series(data=sim_cfg_path, index=[0], name="sim")
         else:
-            raise RuntimeError("Neither `analyses/simulations.pkl` nor `BlueConfig` found under %s" %
-                               os.path.join(SIMS_DIR, project_name))
+            raise RuntimeError("Neither `analyses/simulations.pkl` nor `BlueConfig`/`simulation_config.json` found"
+                               "under %s" % os.path.join(SIMS_DIR, project_name))
 
 
 def _idx2str(idx, level_name):
@@ -66,9 +70,12 @@ def midx2str(midx, level_names):
         raise RuntimeError("Incorrect level_names passed")
 
 
-def get_spikes(sim, t_start, t_end, gids=None):
+def get_spikes(sim, t_start, t_end, gids=None, node_pop=None):
     """Extracts spikes with bluepy"""
-    spikes = sim.spikes.get(gids, t_start, t_end)
+    if node_pop is not None:
+        spikes = sim.spikes[node_pop].get(gids, t_start, t_end)
+    else:
+        spikes = sim.spikes.get(gids, t_start, t_end)
     return spikes.index.to_numpy(), spikes.to_numpy()
 
 
@@ -165,6 +172,41 @@ def get_tc_spikes(sim_config, t_start, t_end):
     else:
         warnings.warn("No SpikeFile found in the BlueConfig, returning empty arrays.")
         return np.array([]), np.array([], dtype=int)
+
+
+def _get_snap_spikf_names(config):
+    """Gets the name of the spike_files from bluepysnap.Simulation.config object"""
+    f_names = []
+    for _, input in config["inputs"].items():
+        if input["input_type"] == "spikes":
+            if not os.path.isabs(input["spike_file"]):
+                warnings.warn("Relative spike file path %s,"
+                              "which will prob. break the code in the next step" % input["spike_file"])
+            f_names.append(input["spike_file"])
+    return f_names
+
+
+def get_snap_tc_spikes(sim_config, t_start, t_end):
+    """Loads in input spikes (on projections) using the bluepysnap.Simulation.config object.
+    Returns the format used for plotting rasters and population rates"""
+    f_names = _get_snap_spikf_names(sim_config)
+    proj_spikes = {}
+    if len(f_names):
+        for f_name in f_names:
+            if "vpm" in f_name.lower():
+                proj_name = "VPM"
+            elif "pom" in f_name.lower():
+                proj_name = "POm"
+            proj_spikes[proj_name] = {}
+            tmp = np.loadtxt(f_name, skiprows=1)
+            spike_times, spiking_gids = tmp[:, 0], tmp[:, 1].astype(int)
+            idx = np.where((t_start < spike_times) & (spike_times < t_end))[0]
+            proj_spikes[proj_name]["spike_times"] = spike_times[idx]
+            proj_spikes[proj_name]["spiking_gids"] = spiking_gids[idx]
+        return proj_spikes
+    else:
+        warnings.warn("No spike_file found in the simulation_config.json, returning empty dict.")
+        return {}
 
 
 def load_patterns(project_name, seed=None):
