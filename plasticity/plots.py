@@ -230,8 +230,8 @@ def plot_gmax_change_pie(gmax_diffs, fig_name):
     """Plots layer-wise pie charts of percentage of gmax changing"""
     plt.rcParams["patch.edgecolor"] = "black"
     fig = plt.figure(figsize=(10, 6.5))
-    for i, layer in enumerate([23, 4, 5, 6]):
-        gmax_diff = np.concatenate((gmax_diffs[2], gmax_diffs[3])) if layer == 23 else gmax_diffs[layer]
+    for i, layer in enumerate(["23", "4", "5", "6"]):
+        gmax_diff = np.concatenate((gmax_diffs["2"], gmax_diffs["3"])) if layer == "23" else gmax_diffs[layer]
         n_syns = len(gmax_diff)
         potentiated = len(np.where(gmax_diff > 0)[0])
         depressed = len(np.where(gmax_diff < 0)[0])
@@ -239,7 +239,7 @@ def plot_gmax_change_pie(gmax_diffs, fig_name):
         ratios = 100 * sizes / np.sum(sizes)
         ax = fig.add_subplot(2, 2, i+1)
         ax.pie(sizes, labels=["%.2f%%" % ratio for ratio in ratios], colors=[RED, "lightgray", BLUE])
-        ax.set_title("L%i (n = %i)" % (layer, n_syns))
+        ax.set_title("L%s (n = %i)" % (layer, n_syns))
     fig.tight_layout()
     fig.savefig(fig_name, bbox_inches="tight")
     plt.close(fig)
