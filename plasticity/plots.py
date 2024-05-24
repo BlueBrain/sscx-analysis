@@ -598,3 +598,92 @@ def plot_synapses(morph, x, y, ncols, col_bins, fig_name, cmap="coolwarm", col_b
     sns.despine(ax=ax, trim=True)
     fig.savefig(fig_name, dpi=100, bbox_inches="tight")
     plt.close(fig)
+    
+    
+def plot_rate_comparison(t_rate, rates, t_report, dists, palette, fig_name, compare_with="new (seed1)"):
+    """Plot comparison of firing rates and norm. of changes in rho"""
+    fig = plt.figure(figsize=(10, 6.5))
+    gs = gridspec.GridSpec(4, 1, height_ratios=[5, 1, 5, 1])
+    ax = fig.add_subplot(gs[0])
+    for sim_name, rate in rates.items():
+        ax.plot(t_rate, rate, color=palette[sim_name], label="%s (mean: %.4f)" % (sim_name, np.mean(rate)))
+    ax.legend(frameon=False)
+    ax.set_xlim([t_rate[0], t_rate[-1]])
+    ax.set_ylabel("EXC rate (Hz)")
+    ax2 = fig.add_subplot(gs[1])
+    for sim_name, rate in rates.items():
+        if sim_name != compare_with:
+            ax2.plot(t_rate, rates[compare_with] - rate, color=palette[sim_name])
+    ax2.set_xlim([t_rate[0], t_rate[-1]])
+    ax2.set_ylabel("Diff. (new - old; Hz)")
+    ax3 = fig.add_subplot(gs[2])
+    for sim_name, dist in dists.items():
+        ax3.plot(t_report[1:], dist, color=palette[sim_name], label="%s (mean: %.4f)" % (sim_name, np.mean(dist)))
+    ax3.legend(frameon=False)
+    ax3.set_xlim([t_report[1], t_report[-1]])
+    ax3.set_ylabel("||rho(t+1) - rho(t)||")
+    ax4 = fig.add_subplot(gs[3])
+    for sim_name, dist in dists.items():
+        if sim_name != compare_with:
+            ax4.plot(t_report[1:], dists[compare_with] - dist, color=palette[sim_name])
+    ax4.set_xlim([t_report[1], t_report[-1]])
+    ax4.set_xlabel("Time (ms)")
+    ax4.set_ylabel("Diff. (new - old)")
+    sns.despine(offset=2)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+    
+    
+def plot_rho_comparison(t, means, dists, palette, fig_name, compare_with="new (seed1)"):
+    """Plot comparison of mean rho and norm. of changes across time steps)"""
+    fig = plt.figure(figsize=(10, 6.5))
+    gs = gridspec.GridSpec(2, 2, height_ratios=[5, 1])
+    ax = fig.add_subplot(gs[0, 0])
+    for sim_name, mean in means.items():
+        ax.plot(t, mean, color=palette[sim_name], lw=2, label="%s (mean: %.4f)" % (sim_name, np.mean(mean)))
+    ax.legend(frameon=False)
+    ax.set_xlim([t[0], t[-1]])
+    ax.set_ylabel("Mean rhos")
+    ax2 = fig.add_subplot(gs[1, 0])
+    for sim_name, mean in means.items():
+        if sim_name != compare_with:
+            ax2.plot(t, means[compare_with] - mean, color=palette[sim_name])
+    ax2.set_xlim([t[0], t[-1]])
+    ax2.set_xlabel("Time (ms)")
+    ax2.set_ylabel("Diff. (new - old)")
+    ax3 = fig.add_subplot(gs[0, 1])
+    for sim_name, dist in dists.items():
+        ax3.plot(t, dist, color=palette[sim_name], lw=2, label="%s (mean: %.2f)" % (sim_name, np.mean(dist)))
+    ax3.legend(frameon=False)
+    ax3.set_xlim([t[0], t[-1]])
+    ax3.set_ylabel("||rho(t) - rho*(t)||")
+    ax3.set_xlabel("Time (ms)")
+    sns.despine(offset=2)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_lw_comparison(rate_df, diff_df, palette, fig_name):
+    """Plot layer-wise single cell firing rates and the propensity of changes"""
+    fig = plt.figure(figsize=(10, 6.5))
+    ax = fig.add_subplot(1, 3, 1)
+    sns.boxplot(data=rate_df, x="rate", y="layer", hue="sim", order=["2", "3", "4", "5", "6"],
+                palette=palette, fliersize=0, orient="h", ax=ax)
+    ax.set_xlim([0, 2.5])
+    ax.set_xlabel("Single cell rates (Hz)")
+    ax2 = fig.add_subplot(1, 3, 2)
+    sns.barplot(data=diff_df, x="dep.", y="layer", hue="sim", order=["2", "3", "4", "5", "6"],
+                palette=palette, orient="h", legend=False, ax=ax2)
+    ax2.set_xlabel("Propensity of depression (%)")
+    ax2.set_ylabel("")
+    ax3 = fig.add_subplot(1, 3, 3)
+    sns.barplot(data=diff_df, x="pot.", y="layer", hue="sim", order=["2", "3", "4", "5", "6"],
+                palette=palette, orient="h", legend=False, ax=ax3)
+    ax3.set_xlabel("Propensity of potentiation (%)")
+    ax3.set_ylabel("")
+    sns.despine(left=True, trim=True, offset=2)
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=100, bbox_inches="tight")
+    plt.close(fig)
