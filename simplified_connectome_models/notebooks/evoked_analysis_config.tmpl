@@ -1,0 +1,34 @@
+# BlueETL analysis configuration for stimulus-evoked simulation campaigns
+version: 4
+simulation_campaign: <SIM_CAMPAIGN>
+cache:
+  path: <OUT_PATH>
+analysis:
+  spikes:
+    extraction:
+      report:
+        type: spikes
+      neuron_classes:
+        L23_EXC: {query: {layer: [2, 3], synapse_class: [EXC]}}
+        L4_EXC: {query: {layer: [4], synapse_class: [EXC]}}
+        L5_EXC: {query: {layer: [5], synapse_class: [EXC]}}
+        L6_EXC: {query: {layer: [6], synapse_class: [EXC]}}
+        L1_INH: {query: {layer: [1], synapse_class: [INH]}}
+        L23_INH: {query: {layer: [2, 3], synapse_class: [INH]}}
+        L4_INH: {query: {layer: [4], synapse_class: [INH]}}
+        L5_INH: {query: {layer: [5], synapse_class: [INH]}}
+        L6_INH: {query: {layer: [6], synapse_class: [INH]}}
+        ALL_EXC: {query: {synapse_class: [EXC]}}
+        ALL_INH: {query: {synapse_class: [INH]}}
+        ALL: {query: {synapse_class: [EXC, INH]}}
+      limit: null
+      population: S1nonbarrel_neurons
+      node_set: null
+      windows:
+        w_spont: {bounds: [-500, 0], initial_offset: 2000, n_trials: 10, trial_steps_value: 1000, window_type: spontaneous}
+        w_evoked: {bounds: [0, 500], initial_offset: 2000, n_trials: 10, trial_steps_value: 1000, window_type: evoked}
+    features:
+    - type: multi
+      groupby: [simulation_id, circuit_id, neuron_class, window]
+      function: blueetl.external.bnac.calculate_features.calculate_features_multi
+      params: {export_all_neurons: true}
